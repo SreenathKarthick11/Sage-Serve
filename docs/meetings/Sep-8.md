@@ -2,14 +2,14 @@
 
 > Date : Sep 8 2026
 
-## Agneda
+## Agenda
 
-Discuss about what the is project and the expections for submission.
+Discuss about what the is project and the expectations for submission.
 
 ## Discussions
 
-- When through the 3 page papar and understood how sage serve works
-- Discussed the expectations and deliveralbes of the project
+- When through the 3 page paper and understood how sage serve works
+- Discussed the expectations and deliverables of the project
 
 ## TODO
 
