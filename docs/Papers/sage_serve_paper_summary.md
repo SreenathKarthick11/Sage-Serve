@@ -202,7 +202,7 @@ Because experimenting with real GPU fleets is expensive, the authors built a sim
 ## 10. Headline Results
 
 - **GPU-hour savings:** SageServe's forecast-aware strategies (LT-I, LT-U, LT-UA) use **19.65% to 24.21% fewer instance-hours** than pure reactive scaling for a single day/model, because they don't chase every momentary traffic blip.
-- **Cost translation:** At roughly $98.32/hour for an H100 cluster (Azure pricing at time of writing), saving about 85 instance-hours/day for one model in one region extrapolates to about **$0.6 million/week**, or **up to $2.5 million/month**, across their evaluated setting (3 models, 4 regions, 7 days).
+- **Cost translation:** At roughly \$98.32/hour for an H100 cluster (Azure pricing at time of writing), saving about 85 instance-hours/day for one model in one region extrapolates to about **\$0.6 million/week**, or **up to \$2.5 million/month**, across their evaluated setting (3 models, 4 regions, 7 days).
 - **No SLA sacrifice:** LT-U and LT-UA maintain latency SLAs while achieving these savings; LT-I alone is slightly worse for TTFT/E2E latency because of its immediate-scale-down behavior.
 - **Comparison with Chiron:** Chiron consistently deploys far more instances (its curve sits well above all of SageServe's strategies and even above plain Reactive scaling) without a corresponding tail-latency benefit, because it scales based on static offline profiles rather than live utilization signals.
 - **Wasted scale-up cycles cut by about 70%:** Because cold starts are expensive, unnecessary scale-up/scale-down churn wastes GPU-hours even when it doesn't cause SLA violations. SageServe's forecast-aware pacing avoids much of this churn.
