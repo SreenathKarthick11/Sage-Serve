@@ -163,14 +163,14 @@ flowchart TD
 Given an hourly ILP recommendation, when should the system actually act on it? The paper tests three approaches:
 
 ```mermaid
-flowchart LR
+flowchart TD
     ILP[Hourly ILP Recommendation] --> LTI[LT-I: Immediate]
-    ILP --> LTU[LT-U: Wait for Utilization Threshold]
-    ILP --> LTUA[LT-UA: Utilization plus ARIMA-gap override]
+    ILP --> LTU[LT-U: Wait for Utilization <br> Threshold]
+    ILP --> LTUA[LT-UA: Utilization plus <br> ARIMA-gap override]
 
-    LTI --> R1[Fast but can over or under provision early]
-    LTU --> R2[Paced by real demand, safer latency]
-    LTUA --> R3[Also reacts if forecast is badly wrong]
+    LTI --> R1[Fast but can over or<br> under provision early]
+    LTU --> R2[Paced by real demand,<br> safer latency]
+    LTUA --> R3[Also reacts if forecast <br>is badly wrong]
 ```
 
 1. **LT-I (Immediate):** Scale to the recommended count right away, every hour. Simple, but can cause premature over-provisioning (scaling for a peak that hasn't arrived yet) and can hurt latency when scaling down too aggressively before the hour's real trough occurs.
