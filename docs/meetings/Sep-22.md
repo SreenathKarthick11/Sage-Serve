@@ -10,7 +10,7 @@
 
 ## Target for Midsem Presentation
 
-- [ ] Clone the Sage Server repo,  into this repository.
+- [x] Clone the Sage Server repo, into this repository.
 - [ ] Make slides summerising the paper.
 - [ ] Add a slide explain our goal for the project.
 - [ ] Run the SageServe Program in Conda : [Repo Link](https://github.com/shashwatj07/SageServe)
