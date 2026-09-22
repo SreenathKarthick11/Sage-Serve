@@ -1,0 +1,5 @@
+_target_: arbiter.GlobalArbiterARIMAChecking
+overheads: 
+  spin_up: 155
+  spin_down: 0
+  reclaim_spot: 65

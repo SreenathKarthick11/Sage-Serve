@@ -1,0 +1,58 @@
+defaults:
+  - controller: us3-new
+  - global_router: probabilistic
+  - global_arbiter: milp
+  - region_repo: default
+  # - cluster: dgx-a100
+  # - router: noop
+  # - arbiter: noop
+  - cluster_repo: default
+  - arbiter_repo: default
+  # - global_arbiter_repo: default
+  - model_endpoint_repo: default
+  - application_repo: default
+  - hardware_repo: default
+  - start_state_repo: default
+  - model_repo: default
+  - orchestrator_repo: default
+  - performance_model: db
+  - power_model: constant
+  # - applications: solo
+  - trace: enterprise_sydney
+  # - start_state: orca
+  - override hydra/launcher: ray
+  - _self_
+
+end_time: 8640000
+debug: False
+seed: 0
+
+feed_async: True
+feed_async_granularity: 1
+scaling_level: 2 # 0 for off, 1 for spot, 2 for inter model scaling
+scaling_interval: -1 # -1 for off, otherwise +ve values in seconds
+short_term_scaling: True
+long_term_scaling: False
+print_class_stack: False
+arima_checking_scaling_threshhold: 5
+
+siloed: False
+
+choices: ${hydra:runtime.choices}
+# output_dir: results/${seed}/${start_state.state_type}/${trace.filename}/${cluster.servers.0.count}_${cluster.servers.1.count}/${applications.0.model_architecture}/${applications.0.scheduler}
+# output_dir: results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/
+output_dir: results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/lts_${long_term_scaling}_sts${short_term_scaling}/arbiter_${controller.regions.0.arbiter}/
+
+hydra:
+  # changes the cwd to the output directory
+  run:
+    dir: ${output_dir}
+  sweep:
+    dir: ""
+    subdir: ${output_dir}
+  job:
+    chdir: True
+  launcher:
+    ray:
+      init:
+        address: "10.0.0.9:6379"

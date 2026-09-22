@@ -1,0 +1,5 @@
+_target_: region.Region
+region_name: westus
+region_router: chiron_region_router
+cache: basic
+overheads: {}

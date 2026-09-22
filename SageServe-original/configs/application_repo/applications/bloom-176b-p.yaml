@@ -1,0 +1,9 @@
+model_architecture: bloom-176b
+model_size: bloom-176b-fp16
+allocator: noop
+scheduler: jsq
+processor_affinity: h100
+processor_count: 8
+overheads: {}
+debug: default.debug
+_target_: application.Application

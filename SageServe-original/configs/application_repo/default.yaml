@@ -1,0 +1,2 @@
+applications: configs/application_repo/applications
+debug: False

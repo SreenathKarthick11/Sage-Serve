@@ -1,0 +1,7 @@
+__pycache__
+results
+traces/*
+.DS_Store
+*.lp
+ilp_outputs/*
+figures/*

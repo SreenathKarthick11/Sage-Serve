@@ -1,0 +1,138 @@
+power_budget: 232000
+
+regions:
+- region_id: 0
+  region_name: westus
+  region_cluster: dgx-a100
+  arbiter: basic_arbiter
+  model_endpoints:
+  - model_endpoint_id: 0
+    model_name: A-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 1
+    model_name: B-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 2
+    model_name: C-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 3
+    model_name: D-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 4
+    model_name: A-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 5
+    model_name: B-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 6
+    model_name: C-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 7
+    model_name: D-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+- region_id: 1
+  region_name: centralus
+  region_cluster: dgx-a100
+  arbiter: basic_arbiter
+  model_endpoints:
+  - model_endpoint_id: 0
+    model_name: A-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 1
+    model_name: B-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 2
+    model_name: C-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 3
+    model_name: D-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 4
+    model_name: A-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 5
+    model_name: B-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 6
+    model_name: C-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 7
+    model_name: D-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+- region_id: 2
+  region_name: eastus
+  region_cluster: dgx-a100
+  arbiter: basic_arbiter
+  model_endpoints:
+  - model_endpoint_id: 0
+    model_name: A-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 1
+    model_name: B-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 2
+    model_name: C-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 3
+    model_name: D-p
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 16
+  - model_endpoint_id: 4
+    model_name: A-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 5
+    model_name: B-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 6
+    model_name: C-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4
+  - model_endpoint_id: 7
+    model_name: D-d
+    model_endpoint_router: round_robin
+    start_state: orca
+    instance_count: 4

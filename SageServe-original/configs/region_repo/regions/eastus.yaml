@@ -1,0 +1,5 @@
+_target_: region.Region
+region_name: eastus
+region_router: static_router
+cache: basic
+overheads: {}

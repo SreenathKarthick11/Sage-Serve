@@ -1,0 +1,3 @@
+overheads:
+  routing_delay: 0
+_target_: region_router.ChironRegionRouter

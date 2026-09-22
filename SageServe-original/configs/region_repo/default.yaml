@@ -1,0 +1,3 @@
+regions: configs/region_repo/regions
+region_routers: configs/region_repo/region_routers
+caches: configs/region_repo/caches

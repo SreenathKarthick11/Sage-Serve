@@ -1,0 +1,9 @@
+model_architecture: B
+model_size: B
+allocator: noop
+scheduler: token_jsq
+processor_affinity: a100
+processor_count: 8
+overheads: {}
+debug: default.debug
+_target_: application.Application

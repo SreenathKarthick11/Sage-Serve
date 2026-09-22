@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+arima_traces: traces/forecasts/
+long_term_scaling_interval: 3600
+post_processing_strategy: immediate
+max_time: 604800
+arima_aware_arbiter: False
+_target_: global_arbiter.MilpGlobalArbiter

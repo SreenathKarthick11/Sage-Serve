@@ -1,0 +1,5 @@
+_target_: model.LLMArchitecture
+name: B
+num_layers: 70
+hidden_size: 14336
+num_heads: 112

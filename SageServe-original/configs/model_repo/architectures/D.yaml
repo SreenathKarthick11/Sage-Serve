@@ -1,0 +1,5 @@
+_target_: model.LLMArchitecture
+name: D
+num_layers: 16
+hidden_size: 2048
+num_heads: 32

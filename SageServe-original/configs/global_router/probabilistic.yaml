@@ -1,0 +1,6 @@
+defaults:
+  - overheads: zero
+  - _self_
+
+no_reroute: True
+_target_: global_router.ProbabilisticRouter

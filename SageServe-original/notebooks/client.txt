@@ -1,0 +1,40 @@
+Feed-File
+EnterpriseSydney
+AI Notes in Recap
+Outlook Suggested Replies
+Suggestion Chip
+Teams Co-Pilot (New)
+Augloop-Chat (PowerPoint Copilot)
+Word Copilot Summarization - Proactive
+Default
+Augloop-Remake (Word)
+Augloop-Chat (Word Copilot)
+PPT Visual Summary Proactive
+Viva Engage - Summarization
+Outlook-Elaborate
+Word to PPT Deck Conversion (Project Bumblebee)
+Augloop-Chat (Excel Copilot)
+PPT Summary Proactive
+Augloop-Storyteller (PowerPoint)
+Augloop-Start (Word)
+BizChat Echo Traffic
+Teams Chat Summarization (CommCopilot)
+PPT Copilot Multimodal Comprehension
+Outlook Thread Summarize
+Stream-Copilot
+b9ae273f-77be-4b66-94a2-69d3c8b30aae
+Word - Conversational Chat
+PPT - Conversational Chat
+Message-Post (Teams Chat Compose)
+Outlook Email Coach / Feedback
+Augloop-Summarization (Word)
+Alchemy
+Analysis with Chat (Excel)
+AugLoop-Ppt Summarization
+Augloop-Insert (Word)
+Playground Chat
+Auto Root Causing
+MSAI Utterance Analysis NAM MSIT Pattern
+OneNote-Understand
+Augloop-Spark (Whiteboard)
+Outlook Schedule from Email

@@ -1,0 +1,129 @@
+Feed–File (Pre-warm)
+Business Chat
+Web Tab For M365
+BizChat-Proactive Offline
+BizChat-Proactive
+Teams Title Extraction
+3S Offline Files Summarization
+BizChat Intl Eval
+Short Meeting Summary
+PKGAlexandriaPhi2
+Prompt-Technique Experimentation
+Foundry Evaluation Tool
+Augloop-Column Generation (Excel)
+Heron_amlworkspaceuofagru34yp2w
+Search - People
+d6b5f57c-ddc0-4e73-ab14-2bab3465f6f2
+Excel Copilot Dev
+Knowledge Metastream
+Collaboration-Networks
+MSAI Utterance Analysis All
+Augloop-Chat (OneNote Copilot)
+Heron_amlworkspacel34d2xqott3cg
+LLM API Synthetics
+40c4e217-2050-46eb-9804-e20bedc54b6e
+Teams Message Search Relevance
+Outlook Catchup
+Substrate Graph RAG
+ES Copilot
+MSAI Utterance Analysis NAM
+Forms – Create and Refine
+Scalable Extractions (MSAI)
+Designer – Generative Edit
+MSAI Utterance Analysis Large
+Heron_amlworkspacel466ld5izy5q4
+3S_Query_formulation_and_CIQ
+Heron_amlworkspace3oiz66dnocaqy
+Augloop-Cocreate (Loop Copilot)
+MSAI Utterance Analysis EUR Commercial
+Augloop-SharePoint Copilot
+OutlookFluxCopilot-AugLoop-E2E-Test-ReasoningTests
+Enterprise Fine-Tuning
+Planner Copilot
+MSAI Utterance Analysis NAM MSIT
+Admin Survey Copilot
+Augloop-Affinity (Whiteboard)
+Augloop-Sydney (Copilot Experimentation)
+MSAI Utterance Analysis EUR MSIT
+Word Prompt Assistance
+Teams-Chat Copilot
+Word - Prompt Evaluation
+Files Search Relevance
+Topics in Bizchat
+Loop Copilot - Prompt Evaluation
+Top of Mind
+Suggested Topics
+Teams Snapshot
+Searchrelevance
+Visual Insights
+Viva Goals - Goals Generation and Refinement
+Admin Copilot with Sydney
+Task Extraction
+Office AI Platform RAI
+Security Copilot Benchmark
+Harmony - Help Me Create
+BRB triage
+Viva Engage-Writing Assistant
+Viva Goals - Progress tracking and summarization
+Scoring Distribution
+Heron_amlworkspacezve2idbrmvejq
+MSAI Utterance Analysis NAM Commercial
+SOTELS Trust ELIP Copilot
+local_throttling_testing
+Syntex Powered Columns
+Compliant Sydney Devbox
+Artifact quality check
+Copilot in Viva Glint
+Augloop-Eureka (Whiteboard)
+User Copilot
+Designer Skill
+Viva Insights (Copilot)
+89755230-8bcc-45d6-9e67-a10e3ba46e5e
+Viva Goals - Infra
+Data Concierge
+M365 AI Jumpstart
+MChat Analytics
+Heron_amlworkspacepzrtok7brqoka
+Heron_amlworkspacev2vbxhqzb3mgk
+BizChat Prompt Rewriting
+Open Studio Sandbox
+cf50305a-4704-414a-97e6-0c0f05fe2b34
+Date Time Resolution For Time Copilot
+6adc679f-09b7-4d07-87be-e15455522831
+
+Loop - Recap
+Augloop-Opera
+T-Prompt PoC
+PRM
+Microsoft Stream Data Science (Dev Environment)
+People Lifeline
+Viva Learning
+Scalable Extractions
+Viva Topics - Topic Extraction
+Grounding with LLM (Gold)
+Heron_amlworkspacexgu36ax6sfm66
+Heron_amlworkspacehmjro6ruhfq3i
+EnterpriseSydney (Partner Experimentation)
+Heron_amlworkspace34dfcuomqwf3k
+Sharepoint Advanced Management AI Insights
+fb8d773d-7ef8-4ec0-a117-179f88add510
+Meeting Prep Time
+Viva Topics
+Meeting Prep Summarization (Outlook)
+Generate screenplay
+Copilot Calendar Peek Suggestions
+Viva Goals - Exploratory conversations, Help and QnA scenarios
+Heron_amlworkspacec255jmpvu2kxc
+Viva Engage - FAQ
+Outlook Visual Theming
+3S Online Files Summarization
+powerapps-gen-layouts
+AugLoop-Personalization
+AugLoop-Chat (Viva Copilot)
+Intelligent Search OData Generator
+Heron_amlworkspacejr5qn6dxmf24k
+ContentSyncUp
+Heron_amlworkspaceol3zuxgkbe44c
+Places-Analytics
+Heron_amlworkspacex34h5a26uhndc
+Bizchat Synthesis Dev Tools
