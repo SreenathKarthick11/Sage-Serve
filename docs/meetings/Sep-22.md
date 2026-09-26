@@ -16,6 +16,8 @@
 - [ ] Run the SageServe Program in Conda : [Repo Link](https://github.com/shashwatj07/SageServe)
 - [x] Google Slides is used for the presentation. [Google Slide Link](https://docs.google.com/presentation/d/1nEfR7WGiZX0B1zEJosX6CK1tyWVI0BmDf5KjZJzLkqY/edit?slide=id.p#slide=id.p)
 - [x] Answers for the below [questions](#questions)
+- [x] Google Slides is used for the presentation. [Google Slide Link](https://docs.google.com/presentation/d/1nEfR7WGiZX0B1zEJosX6CK1tyWVI0BmDf5KjZJzLkqY/edit?slide=id.p#slide=id.p)
+- [x] Answers for the below [questions](#questions)
 
 > [!Note]
 > The SageServe Repo is a clone of the Splitwise repo , which has been modified.
