@@ -55,4 +55,4 @@ hydra:
   launcher:
     ray:
       init:
-        address: "auto"
+        address: "10.0.0.9:6379"

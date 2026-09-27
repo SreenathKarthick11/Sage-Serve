@@ -151,18 +151,7 @@ def init_regions(cfg, controller):
         region:Region = Region.from_config(region_cfg,
                                     controller=controller, region_cluster=region_cluster)
         region_cluster.set_region(region)
-        # arbiter:Arbiter = arbiter_repo.get_arbiter(region_cfg.arbiter, cluster=region_cluster, scaling_threshhold=cfg.arima_checking_scaling_threshhold)
-        if region_cfg.arbiter == "global_arbiter_ARIMA_checking":
-            arbiter:Arbiter = arbiter_repo.get_arbiter(
-                region_cfg.arbiter,
-                cluster=region_cluster,
-                scaling_threshhold=cfg.arima_checking_scaling_threshhold
-            )
-        else:
-            arbiter:Arbiter = arbiter_repo.get_arbiter(
-                region_cfg.arbiter,
-                cluster=region_cluster
-            )
+        arbiter:Arbiter = arbiter_repo.get_arbiter(region_cfg.arbiter, cluster=region_cluster, scaling_threshhold=cfg.arima_checking_scaling_threshhold)
         region_cluster.set_arbiter(arbiter)
         for model_endpoint_cfg in region_cfg.model_endpoints:
             # model_cluster = ModelCluster.from_config(model_cluster_cfg, region=region)
