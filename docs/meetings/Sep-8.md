@@ -32,5 +32,5 @@ Discuss the project scope, expectations, proposed approach, and submission deliv
 - [x] Read the complete **SageServe paper (24 pages)** and understand the architecture, forecasting, optimization, and evaluation methodology.
   [SageServe - arXiv](https://arxiv.org/pdf/2502.14617)
 
-- [ ] Read through the **SplitWise simulator repository** and understand how to run and modify it for the project.
+- [x] Read through the **SplitWise simulator repository** and understand how to run and modify it for the project.
   [SplitWise Simulator - GitHub](https://github.com/mutinifni/splitwise-sim)
