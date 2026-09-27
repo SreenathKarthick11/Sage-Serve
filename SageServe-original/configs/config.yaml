@@ -20,7 +20,7 @@ defaults:
   # - applications: solo
   - trace: enterprise_sydney
   # - start_state: orca
-  - override hydra/launcher: ray
+  - override hydra/launcher: basic # changed from ray
   - _self_
 
 end_time: 8640000
@@ -52,7 +52,8 @@ hydra:
     subdir: ${output_dir}
   job:
     chdir: True
-  launcher:
-    ray:
-      init:
-        address: "10.0.0.9:6379"
+  # Changed : commented the below
+  # launcher:
+  #  ray:
+  #    init:
+  #      address: "10.0.0.9:6379"
