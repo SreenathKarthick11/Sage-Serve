@@ -16,5 +16,5 @@
 
 - [x] Add a summary document of the code base.
 - [x] Add the module and sequense diagram to slides.
-- [ ] Try replicating the result of the paper.
+- [x] Try replicating the running the orginial repo locally.
 
