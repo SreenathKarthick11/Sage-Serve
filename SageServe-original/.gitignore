@@ -5,3 +5,4 @@ traces/*
 *.lp
 ilp_outputs/*
 figures/*
+.venv/

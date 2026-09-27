@@ -18,7 +18,8 @@ class Arbiter(ABC):
     """
     def __init__(self,
                  cluster,
-                 overheads):
+                 overheads,
+                 **kwargs): # changes : added this 
         self.cluster = cluster
         self.overheads = overheads
         self.servers = cluster.servers
