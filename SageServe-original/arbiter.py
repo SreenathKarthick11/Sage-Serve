@@ -19,7 +19,7 @@ class Arbiter(ABC):
     def __init__(self,
                  cluster,
                  overheads,
-                 **kwargs): # changes : added this 
+                 **kwargs): # changes : added this
         self.cluster = cluster
         self.overheads = overheads
         self.servers = cluster.servers
@@ -40,13 +40,13 @@ class Arbiter(ABC):
     def add_application(self, application):
         self.applications.append(application)
         self.allocators[application.application_id] = application.allocator
-    
+
     def reset_changes(self):
         for model_endpoint in self.changes.keys():
             self.changes[model_endpoint] = 0
 
 
-    def save_results_intermediate(self, write_itr): 
+    def save_results_intermediate(self, write_itr):
         utils.save_dict_as_csv(self.results, f"arbiters/{self.cluster.region.region_name}/{write_itr}.csv")
         self.last_log_iter = write_itr
         self.results = {
@@ -137,7 +137,7 @@ class BasicArbiter(Arbiter):
             recent_application = model_endpoint.applications[-1]
             assert len(recent_application.instances) == 2
             recent_application.allocator.start_reclaim_spot_instance(model_endpoint.model_name)
-    
+
     def spin_up_new_instance(self, model_endpoint, application, processors):
         start_state_cfg = start_state_repo.get_start_state_cfg(model_endpoint.start_state)
         instance_cfg = start_state_cfg.instance
@@ -299,23 +299,24 @@ class BasicArbiter(Arbiter):
             self.results['prod'].append(str(sum([len(app.instances) for app in model_ep.applications])))
             self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))
             self.results['memory_util'].append(memory_utilisation)
-        
+
 class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
     """Arbiter that is aware of the recommendations by the global arbiter"""
     """
-    Run with 
+    Run with
         long_term_scaling=True
         short_term_scaling=True
         controller.regions.0.arbiter=global_arbiter_short_term_scaling
         controller.regions.1.arbiter=global_arbiter_short_term_scaling
         controller.regions.2.arbiter=global_arbiter_short_term_scaling
     """
-    
+
     def __init__(self,
                  cluster,
-                 overheads):
+                 overheads,
+                 **kwargs): # changes : added this
         super().__init__(cluster, overheads)
-    
+
     def scale(self, model_endpoint):
         """
         Implement scaling logic here
@@ -325,11 +326,11 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
             self.changes[model_endpoint.model_name] = 0
             self.scaling_in_progress[model_endpoint.model_name] = False
             self.next_scale_time[model_endpoint.model_name] = 0
-        
+
         # reset scaling_in_progress if time has crossed
         if clock() >= self.next_scale_time[model_endpoint.model_name]:
             self.scaling_in_progress[model_endpoint.model_name] = False
-        
+
         # return if scaling in progress
         if self.scaling_in_progress[model_endpoint.model_name]:
             return
@@ -344,7 +345,7 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
                 #logging.debug(f"Scaling up {self.cluster.region.region_name} {model_endpoint.model_name}")
                 self.scale_up_from_spot(model_endpoint)
                 #logging.debug([len(app.instances) for app in model_endpoint.applications])
-                
+
                 # set scaling progress and next scaling time
                 self.scaling_in_progress[model_endpoint.model_name] = True
                 self.next_scale_time[model_endpoint.model_name] = clock() + self.overheads.reclaim_spot
@@ -352,7 +353,7 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
                 #logging.debug(f"Scaling up other {self.cluster.region.region_name} {model_endpoint.model_name}")
                 processors = self.cluster.free_processors_and_kill_spot()
                 self.scale_up_from_spot_other(model_endpoint, processors)
-                
+
                 # set scaling progress and next scaling time
                 self.scaling_in_progress[model_endpoint.model_name] = True
                 self.next_scale_time[model_endpoint.model_name] = clock() + self.overheads.spin_up
@@ -360,7 +361,7 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
                 #logging.debug("Failed to up scale")
                 # indicate no scaling
                 self.scaling_in_progress[model_endpoint.model_name] = False
-            
+
             # if scaled, subtract from changes to make
             if self.scaling_in_progress[model_endpoint.model_name]:
                 self.changes[model_endpoint.model_name] -= 1
@@ -371,7 +372,7 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
             self.results['prod'].append(str(sum([len(app.instances) for app in model_ep.applications])))
             self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))
             self.results['memory_util'].append(model_endpoint.get_memory() / model_endpoint.get_max_memory())
-        
+
 
     def force_scale_up(self, model_endpoint):
         if model_endpoint.model_name not in self.changes.keys():
@@ -380,7 +381,7 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
             self.next_scale_time[model_endpoint.model_name] = 0
         self.changes[model_endpoint.model_name] += 1
         #logging.debug(f"force_scale_up for {model_endpoint.model_name} at {model_endpoint}: {self.changes[model_endpoint.model_name]}")
-    
+
     def force_scale_down(self, model_endpoint):
         #logging.debug(f"Force scale down called at {model_endpoint} for {model_endpoint.model_name} at time {clock()}")
         if model_endpoint.scaling_level >= 1:
@@ -389,26 +390,27 @@ class GlobalArbiterAwareShortTermArbiter(BasicArbiter):
             self.results['timestamp'].append(clock())
             self.results['model'].append(model_ep.model_name)
             self.results['prod'].append(str(sum([len(app.instances) for app in model_ep.applications])))
-            self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name))) 
-            self.results['memory_util'].append(model_endpoint.get_memory() / model_endpoint.get_max_memory())   
+            self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))
+            self.results['memory_util'].append(model_endpoint.get_memory() / model_endpoint.get_max_memory())
 
 
 class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
     """Arbiter that is aware of the recommendations by the global arbiter"""
     """
-    Run with 
+    Run with
         long_term_scaling=True
         short_term_scaling=True
         controller.regions.0.arbiter=global_arbiter_short_term_scaling
         controller.regions.1.arbiter=global_arbiter_short_term_scaling
         controller.regions.2.arbiter=global_arbiter_short_term_scaling
     """
-    
+
     def __init__(self,
                  cluster,
-                 overheads):
-        super().__init__(cluster, overheads)            
-    
+                 overheads,
+                 **kwargs): # changes : added this
+        super().__init__(cluster, overheads)
+
     def scale_down_to_spot(self, model_endpoint):
         if len(model_endpoint.applications[-1].instances) == 3:
             #logging.debug([len(app.instances) for app in model_endpoint.applications])
@@ -448,7 +450,7 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             #logging.debug(f"Scaling up {self.cluster.region.region_name} {model_endpoint.model_name}")
             self.scale_up_from_spot(model_endpoint)
             #logging.debug([len(app.instances) for app in model_endpoint.applications])
-            
+
             # set scaling progress and next scaling time
             self.scaling_in_progress[model_endpoint.model_name] = True
             self.next_scale_time[model_endpoint.model_name] = clock() + self.overheads.reclaim_spot
@@ -456,7 +458,7 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             #logging.debug(f"Scaling up other {self.cluster.region.region_name} {model_endpoint.model_name}")
             processors = self.cluster.free_processors_and_kill_spot()
             self.scale_up_from_spot_other(model_endpoint, processors)
-            
+
             # set scaling progress and next scaling time
             self.scaling_in_progress[model_endpoint.model_name] = True
             self.next_scale_time[model_endpoint.model_name] = clock() + self.overheads.spin_up
@@ -475,11 +477,11 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             self.changes[model_endpoint.model_name] = 0
             self.scaling_in_progress[model_endpoint.model_name] = False
             self.next_scale_time[model_endpoint.model_name] = 0
-        
+
         # reset scaling_in_progress if time has crossed
         if clock() >= self.next_scale_time[model_endpoint.model_name]:
             self.scaling_in_progress[model_endpoint.model_name] = False
-        
+
         # return if scaling in progress
         if self.scaling_in_progress[model_endpoint.model_name]:
             for model_ep in self.cluster.region.model_endpoint_routers:
@@ -516,7 +518,7 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             self.results['prod'].append(str(sum([len(app.instances) for app in model_ep.applications])))
             self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))
             self.results['memory_util'].append(memory_utilisation)
-        
+
 
     def force_scale_up(self, model_endpoint):
         if model_endpoint.model_name not in self.changes.keys():
@@ -525,7 +527,7 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             self.next_scale_time[model_endpoint.model_name] = 0
         self.changes[model_endpoint.model_name] += 1
         #logging.debug(f"force_scale_up for {model_endpoint.model_name} at {model_endpoint}: {self.changes[model_endpoint.model_name]}")
-    
+
     def force_scale_down(self, model_endpoint):
         #logging.debug(f"Force scale down called at {model_endpoint} for {model_endpoint.model_name} at time {clock()}")
         if model_endpoint.scaling_level >= 1:
@@ -534,15 +536,16 @@ class GlobalAribiterMemoryUtilizationScaling(BasicArbiter):
             self.results['timestamp'].append(clock())
             self.results['model'].append(model_ep.model_name)
             self.results['prod'].append(str(sum([len(app.instances) for app in model_ep.applications])))
-            self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))   
-            self.results['memory_util'].append(model_endpoint.get_memory() / model_endpoint.get_max_memory()) 
+            self.results['spot'].append(str(self.cluster.get_spot_instance_count(model_ep.model_name)))
+            self.results['memory_util'].append(model_endpoint.get_memory() / model_endpoint.get_max_memory())
 
 
 class GlobalArbiterARIMAChecking(GlobalAribiterMemoryUtilizationScaling):
     def __init__(self,
                  cluster,
                  overheads,
-                 scaling_threshhold):
+                 scaling_threshhold,
+                 **kwargs): # changes : added this
         super().__init__(cluster, overheads)
         self.arima_forecast = None
         self.threshhold = scaling_threshhold
@@ -576,7 +579,7 @@ class GlobalArbiterARIMAChecking(GlobalAribiterMemoryUtilizationScaling):
             self.changes[model_endpoint.model_name] = 0
             self.scaling_in_progress[model_endpoint.model_name] = False
             self.next_scale_time[model_endpoint.model_name] = 0
-        
+
         # reset scaling_in_progress if time has crossed
         if clock() >= self.next_scale_time[model_endpoint.model_name]:
             self.scaling_in_progress[model_endpoint.model_name] = False
@@ -704,7 +707,7 @@ class ChironArbiter(BasicArbiter):
                 self.scale_down_to_spot(model_endpoint)
                 self.scaling_in_progress[model_endpoint.model_name] = True
                 self.next_scale_time[model_endpoint.model_name] = clock() + self.overheads.spin_down
-        
+
         for model_ep in self.cluster.region.model_endpoint_routers:
             self.results['timestamp'].append(clock())
             self.results['model'].append(model_ep.model_name)
