@@ -9,7 +9,11 @@
 
 ## Discussion
 
+- Discussed about presentation.
+- Understand the current implementation of code base.
+- Make the forcasting generation code.
 
 ## Tasks
 
-- [ ] Complete the slides.
+- [x] Complete the slides.
+- [x] Added forcast generation (inital implementation).
