@@ -4,27 +4,9 @@
 
 SageServe remains a **simulation-based evaluation framework for forecast-aware autoscaling**.
 
-We will add an **MLOps pipeline around the workload data and
-demand-forecasting model**, rather than treating the simulator itself as
-an ML system.
+>[!NOTE]
+> We will add an **MLOps pipeline around the workload data anddemand-forecasting model**, rather than treating the simulator itself as an ML system.
 
-### Overall flow
-
-```mermaid
-graph LR
-
-R[Raw Workload Trace] --> E[ETL + Data Validation]
-E --> V[Versioned Forecast Dataset]
-V --> T[Train / Validate Forecast Model]
-T --> F[Forecast Generation]
-F --> M[Arbiter Model Registry]
-M --> S[SageServe Simulator]
-S --> SM[Simulation Metrics]
-SM --> M1[Monitoring + Drift Detection]
-M1 --> R1[Retraining when required]
-R1 --> R
-
-```
 
 ------------------------------------------------------------------------
 
@@ -133,10 +115,16 @@ S --> E[Evaluation]
 
 Monitor:
 
-**Data drift** - request rate - token/request distribution - model
-distribution - regional distribution - workload type
+**Data drift** :
+- request rate
+- token/request distribution
+- model distribution
+- regional distribution
+- workload type
 
-**Model performance** - predicted vs actual demand - MAE/RMSE/MAPE
+**Model performance** :
+- predicted vs actual demand
+- MAE/RMSE/MAPE
 
 If drift or forecast error exceeds a configured threshold:
 
@@ -166,15 +154,12 @@ S --> M[MILP GPU allocation]
 M --> E[ simulation & evaluation]
 ```
 
-The simulator is the **downstream evaluation environment** for different
-forecasting model versions.
+The simulator is the **downstream evaluation environment** for different forecasting model versions.
 
 This allows us to answer:
 
 >[!QUESTION]
-Does a new forecasting model not only improve prediction accuracy, but
-> also improve the resulting autoscaling decisions and system-level
-> metrics?
+>Does a new forecasting model not only improve prediction accuracy, but also improve the resulting autoscaling decisions and system-level metrics?
 
 ------------------------------------------------------------------------
 
@@ -195,15 +180,12 @@ M --> D1[Drift/model monitoring]
 
 ```
 
-Then compare **at least two model versions/configurations** through the
-same SageServe simulation and show both:
+Then compare **at least two model versions/configurations** through the same SageServe simulation and show both:
 
 1.  forecasting metrics, and
 2.  downstream simulation/autoscaling metrics.
 
-The goal is to demonstrate that MLOps manages the **entire lifecycle of
-the forecasting component**, while SageServe evaluates its effect on the
-simulated serving system.
+The goal is to demonstrate that MLOps manages the **entire lifecycle of the forecasting component**, while SageServe evaluates its effect on the simulated serving system.
 
 ---
 
