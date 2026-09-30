@@ -1,9 +1,8 @@
-# SageServe --- MLOps Integration Plan
+# SageServe : MLOps Integration Plan
 
-# Potential Project Idea
+## Potential Project Idea
 
-SageServe remains a **simulation-based evaluation framework for
-forecast-aware autoscaling**.
+SageServe remains a **simulation-based evaluation framework for forecast-aware autoscaling**.
 
 We will add an **MLOps pipeline around the workload data and
 demand-forecasting model**, rather than treating the simulator itself as
@@ -11,28 +10,20 @@ an ML system.
 
 ### Overall flow
 
-``` text
-Raw Workload Trace
-        ↓
-ETL + Data Validation
-        ↓
-Versioned Forecast Dataset
-        ↓
-Train / Validate Forecast Model
-        ↓
-Model Registry
-        ↓
-Forecast Generation
-        ↓
-SageServe Simulator
-        ↓
-MILP GPU Allocation
-        ↓
-Simulation Metrics
-        ↓
-Monitoring + Drift Detection
-        ↓
-Retraining when required
+```mermaid
+graph LR
+
+R[Raw Workload Trace] --> E[ETL + Data Validation]
+E --> V[Versioned Forecast Dataset]
+V --> T[Train / Validate Forecast Model]
+T --> F[Forecast Generation]
+F --> M[Arbiter Model Registry]
+M --> S[SageServe Simulator]
+S --> SM[Simulation Metrics]
+SM --> M1[Monitoring + Drift Detection]
+M1 --> R1[Retraining when required]
+R1 --> R
+
 ```
 
 ------------------------------------------------------------------------
@@ -53,32 +44,36 @@ Retraining when required
 
 Build a preprocessing pipeline:
 
-``` text
-Raw trace → clean → aggregate → validate → forecasting dataset
+```mermaid
+flowchart LR
+R[Raw trace] --> C[clean]
+C --> A[aggregate]
+A --> V[validate]
+V --> F[forecasting dataset]
 ```
 
-Validate: - required columns - timestamps - missing values - duplicate
-records - negative/invalid workload values - valid model/region IDs
+Validate:
+- required columns
+- timestamps
+- missing values
+- duplicate
+- records
+- negative/invalid workload values
+- valid model/region IDs
 
 ### Versioning + Lineage
 
-Version: - raw traces - processed forecasting datasets - generated
-forecasts - experiment/simulation runs
+Version:
+- raw traces
+- processed forecasting datasets (generated)
+forecasts
+- experiment/simulation runs
 
 Maintain lineage:
 
-``` text
-Trace version
-    ↓
-Dataset version
-    ↓
-Model version
-    ↓
-Forecast version
-    ↓
-Simulation run
-    ↓
-Evaluation metrics
+```mermaid
+flowchart LR
+T[Trace version] --> F[Forecast version]
 ```
 
 A lightweight Git/DVC-based implementation is sufficient.
@@ -89,8 +84,12 @@ Treat the demand forecaster as the ML model.
 
 Initially use the existing **ARIMA forecasting approach**.
 
-Register: - model version - training dataset version - model
-parameters - MAE/RMSE/MAPE - training timestamp - validation status
+Register:
+- forcast model version
+- training dataset version
+- parameters (MAE/RMSE/MAPE)
+- training timestamp
+- validation status
 
 The selected model version produces the forecast consumed by SageServe.
 
@@ -99,7 +98,7 @@ The selected model version produces the forecast consumed by SageServe.
 Containerize the complete reproducible workflow:
 
 ``` text
-Data preprocessing
++ Data preprocessing
 + Forecasting
 + SageServe
 + Evaluation
@@ -120,18 +119,14 @@ Create a GitHub Actions pipeline that automatically checks:
 
 Example:
 
-``` text
-git push
-   ↓
-Data checks
-   ↓
-Unit/integration tests
-   ↓
-Forecast validation
-   ↓
-Simulator smoke test
-   ↓
-Evaluation
+```mermaid
+flowchart LR
+G[git push] --> D[Data checks]
+D --> U[Unit/integration tests]
+U --> F[Forecast validation]
+F --> S[Simulator smoke test]
+S --> E[Evaluation]
+
 ```
 
 ### Observability + Drift Monitoring
@@ -145,16 +140,12 @@ distribution - regional distribution - workload type
 
 If drift or forecast error exceeds a configured threshold:
 
-``` text
-Drift detected
-      ↓
-Flag model
-      ↓
-Retrain
-      ↓
-Evaluate
-      ↓
-Register new model version
+``` mermaid
+flowchart LR
+D[Drift detected] --> F[Flag model]
+F --> R[Retrain]
+R -->E[Evaluate]
+E --> R1[Register new model version]
 ```
 
 ------------------------------------------------------------------------
@@ -165,16 +156,14 @@ We will **not modify SageServe into an ML system**.
 
 Instead:
 
-``` text
-Forecasting MLOps Pipeline
-          ↓
-    forecast artifact
-          ↓
-     SageServe
-          ↓
- MILP GPU allocation
-          ↓
- simulation/evaluation
+```mermaid
+flowchart LR
+
+F[Forecasting MLOps Pipeline] --> F1[forecast artifact]
+
+F1 -->  S[SageServe]
+S --> M[MILP GPU allocation]
+M --> E[ simulation & evaluation]
 ```
 
 The simulator is the **downstream evaluation environment** for different
@@ -182,7 +171,8 @@ forecasting model versions.
 
 This allows us to answer:
 
-> Does a new forecasting model not only improve prediction accuracy, but
+>[!QUESTION]
+Does a new forecasting model not only improve prediction accuracy, but
 > also improve the resulting autoscaling decisions and system-level
 > metrics?
 
@@ -192,26 +182,17 @@ This allows us to answer:
 
 The final demo should show one complete run:
 
-``` text
-Trace
- ↓
-Validation
- ↓
-Dataset version
- ↓
-Train ARIMA
- ↓
-Register model
- ↓
-Generate forecast
- ↓
-Run SageServe
- ↓
-MILP allocation
- ↓
-Simulation metrics
- ↓
-Drift/model monitoring
+```mermaid
+flowchart TB
+T[Trace] --> V[Validation]
+V --> D[Dataset version]
+D --> T2[Train ARIMA or any forcasting model]
+T2 --> R[Register model]
+R --> G[Generate forecast]
+G --> S[Run simulator]
+S --> M[Simulation metrics inference]
+M --> D1[Drift/model monitoring]
+
 ```
 
 Then compare **at least two model versions/configurations** through the
@@ -224,8 +205,9 @@ The goal is to demonstrate that MLOps manages the **entire lifecycle of
 the forecasting component**, while SageServe evaluates its effect on the
 simulated serving system.
 
+---
 
-# Potential Research Extension: Dynamic SLA Inference for LLM Serving
+<!-- # Potential Research Extension: Dynamic SLA Inference for LLM Serving
 
 ### Problem
 
@@ -324,4 +306,4 @@ using:
 * GPU utilization
 * Queueing delay
 
-This would extend SageServe from a **trace-driven system where the workload class is already known** toward a more realistic **request-driven LLM serving system where service requirements must be determined dynamically**.
+This would extend SageServe from a **trace-driven system where the workload class is already known** toward a more realistic **request-driven LLM serving system where service requirements must be determined dynamically**. -->
