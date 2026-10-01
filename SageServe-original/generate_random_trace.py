@@ -3,7 +3,7 @@ import random
 # request_id,batch,id,client_tenant,request_type,scenario,sla,utility,regions,model_type,workload_type,application_id,arrival_timestamp,batch_size,prompt_size,token_size
 
 def main():
-    num_requests = 5000
+    num_requests = 259200 # changed from 5000
     batch_idx = 0
     num_regions = 3
     with open('traces/random_trace.csv', 'w') as f:

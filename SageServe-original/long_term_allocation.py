@@ -3,6 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 import datetime
+from pathlib import Path
 
 from simulator import clock, schedule_event, cancel_event, reschedule_event
 import start_state_repo
@@ -18,7 +19,7 @@ class LongTermAllocation(ABC):
 
     @abstractmethod
     def get_allocation(self,
-                       timeframe: int, 
+                       timeframe: int,
                        interactive_forecast: List[List[List[int]]],
                        non_interactive_forecast: List[List[List[int]]],
                        opportunistic_forecast: List[List[List[int]]],
@@ -26,11 +27,11 @@ class LongTermAllocation(ABC):
         pass
 
 class MilpLongTermAllocation(LongTermAllocation):
-    def __init__(self, 
-                 models: int, 
-                 regions: int, 
-                 gpus: int, 
-                 model_interchange_time: List[List[float]], 
+    def __init__(self,
+                 models: int,
+                 regions: int,
+                 gpus: int,
+                 model_interchange_time: List[List[float]],
                  model_tps: List[List[float]],
                  gpu_cost: List[float],
                  BIG_M: float = 1e6) -> None:
@@ -44,11 +45,11 @@ class MilpLongTermAllocation(LongTermAllocation):
             assert len(self.model_interchange_time[i]) == self.gpus, f"Model interchange time should have dimensions {models}x{gpus}, got {len(self.model_interchange_time[i])} as second dimension at index {i}"
         assert len(self.model_tps) == self.models, f"Model TPS should have dimensions {models}x{gpus}, got {len(self.model_tps)} as first dimension"
         for i in range(self.models):
-            assert len(self.model_tps[i]) == self.gpus, f"Model TPS should have dimensions {models}x{gpus}, got {len(self.model_tps[i])} as second dimension at index {i}" 
+            assert len(self.model_tps[i]) == self.gpus, f"Model TPS should have dimensions {models}x{gpus}, got {len(self.model_tps[i])} as second dimension at index {i}"
         assert len(self.gpu_cost) == self.gpus, f"GPU cost should have dimensions {gpus}, got {len(self.gpu_cost)} as first dimension"
-    
-    def get_ilp_allocations(self, 
-                            current_allocation: List[List[List[int]]], 
+
+    def get_ilp_allocations(self,
+                            current_allocation: List[List[List[int]]],
                             forecast_demand: List[List[int]],
                             path: str,
                             model_tps: List[List[float]]=None,
@@ -77,26 +78,30 @@ class MilpLongTermAllocation(LongTermAllocation):
         for i in range(self.models):
             for j in range(self.regions):
                 prob += lpSum(
-                            [(allocation_var[(i, j, k)] + current_allocation[i][j][k]) * model_tps[i][k] for k in range(self.gpus)]) >= forecast_demand[i][j] 
+                            [(allocation_var[(i, j, k)] + current_allocation[i][j][k]) * model_tps[i][k] for k in range(self.gpus)]) >= forecast_demand[i][j]
         # check increase signal variable
         for idx in indices:
             prob += 1 >= increase_signal_r[idx] >= 0
             prob += 1 >= increase_signal_s[idx] >= 0
             prob += increase_signal_s[idx] + increase_signal_r[idx] == 1
-            prob += -self.BIG_M * increase_signal_r[idx] + increase_signal_s[idx] <= allocation_var[idx] 
+            prob += -self.BIG_M * increase_signal_r[idx] + increase_signal_s[idx] <= allocation_var[idx]
             prob += allocation_var[idx] <= self.BIG_M * increase_signal_s[idx]
             prob += new_allocation_cost[idx] <= increase_signal_s[idx] * self.BIG_M
             prob += new_allocation_cost[idx] >= -increase_signal_s[idx] * self.BIG_M
             prob += new_allocation_cost[idx] <= allocation_var[idx] + (1 - increase_signal_s[idx]) * self.BIG_M
             prob += new_allocation_cost[idx] >= allocation_var[idx] - (1 - increase_signal_s[idx]) * self.BIG_M
 
-        # objective function 
+        # objective function
         prob += (
             lpSum([allocation_var[idx] * gpu_cost[idx[2]] + new_allocation_cost[idx] * model_startup_cost[idx[0]][idx[2]]] for idx in indices),
             "Cost of changing GPUs"
         )
         if path:
-            prob.writeLP(f"{path}/../../ilp_outputs/my_output_at_{clock()}.lp")
+            output_dir = Path(path).resolve().parents[1] / "ilp_outputs"
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            prob.writeLP(str(output_dir / f"my_output_at_{clock()}.lp"))
+            
         prob.solve(PULP_CBC_CMD(msg=0))
         prob.roundSolution()
 
@@ -108,7 +113,7 @@ class MilpLongTermAllocation(LongTermAllocation):
         return ret_val
 
     def get_allocation(self,
-                       timeframe: int, 
+                       timeframe: int,
                        interactive_forecast: List[List[List[int]]],
                        non_interactive_forecast: List[List[List[int]]],
                        opportunistic_forecast: List[List[List[int]]],
