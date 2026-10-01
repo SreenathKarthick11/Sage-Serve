@@ -80,10 +80,10 @@ class Scheduler(ABC):
     def add_instance(self, instance):
         """
         Track instances at the scheduler level.
-        Helps maintain the scheduler-specific view of instances. 
+        Helps maintain the scheduler-specific view of instances.
         """
         self.instances.append(instance)
-    
+
     def remove_instance(self, instance):
         """
         Remove instance from scheduler.
@@ -109,28 +109,35 @@ class Scheduler(ABC):
             self.run_request(request)
 
     def request_completion(self, request):
-        """
-        Handles the completion of a Request.
-        """
+
         request.complete_at_application_scheduler()
 
+        if self.application.feed_async:
+            feed_async(
+                self.application.region,
+                self.application.router.model_name,
+                self.application.feed_async_granularity
+            )
+
+        # Complete the router chain first so that
+        # global_router_response_time is populated.
+        self.router.request_completion(request)
         r = request
-        self.array_results["response_times"].append(request.metrics.global_router_response_time)
+
+        self.array_results["response_times"].append(r.metrics.global_router_response_time)
         self.array_results["queue_times"].append(r.metrics.queue_time)
         self.array_results["ttft_times"].append(r.metrics.TTFT)
-        self.array_results["tbt_times"].append((r.metrics.global_router_response_time - r.metrics.TTFT) / (r.token_size))
+        self.array_results["tbt_times"].append((r.metrics.global_router_response_time - r.metrics.TTFT)/ r.token_size)
         self.array_results["nth_token_overheads"].append(r.get_nth_token_overhead())
         self.array_results["prompt_sizes"].append(r.prompt_size)
         self.array_results["token_sizes"].append(r.token_size)
         self.node_metrics.extend(r.get_all_node_metrics())
-        if self.application.feed_async:
-            feed_async(self.application.region, self.application.router.model_name, self.application.feed_async_granularity)
-        self.router.request_completion(request)
+
         try:
             self.terminate_executor(self.executors[request.request_id])
         except:
             pass
-        
+
     def run_request(self, request):
         """
         Runs the Request by scheduling it and spawning an Executor.
@@ -196,7 +203,7 @@ class Scheduler(ABC):
 
     def get_results(self):
         """
-        Returns results for all completed requests.   
+        Returns results for all completed requests.
         """
         temp_results = self.array_results
         self.array_results = {}
