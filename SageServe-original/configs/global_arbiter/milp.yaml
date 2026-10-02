@@ -1,7 +1,8 @@
 defaults:
   - _self_
 
-arima_traces: traces/forecasts/
+arima_traces: ${hydra:runtime.cwd}/../data/traces/forecasts
+ilp_output_dir: ${hydra:runtime.cwd}/../experiments/ilp_outputs
 long_term_scaling_interval: 3600
 post_processing_strategy: immediate
 max_time: 604800

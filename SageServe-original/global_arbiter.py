@@ -32,9 +32,10 @@ class GlobalArbiter(ABC):
 class MilpGlobalArbiter(GlobalArbiter):
     """MILP based global router"""
 
-    def __init__(self, arima_traces, long_term_scaling_interval, post_processing_strategy, max_time, arima_aware_arbiter):
+    def __init__(self,arima_traces,ilp_output_dir,long_term_scaling_interval,post_processing_strategy,max_time,arima_aware_arbiter):
         super().__init__(long_term_scaling_interval, max_time)
         self.arima_traces = arima_traces
+        self.ilp_output_dir = ilp_output_dir
         self.forecast_df = {}
         self.region_clusters = None
         self.region_routers = None
@@ -214,7 +215,11 @@ class MilpGlobalArbiter(GlobalArbiter):
 
         logging.info("Final TPS forecast: %s", tps_forecast_final)
 
-        return self.milp_allocator.get_ilp_allocations(current_allocation_transposed, tps_forecast_final, self.arima_traces)
+        return self.milp_allocator.get_ilp_allocations(
+                    current_allocation_transposed,
+                    tps_forecast_final,
+                    self.ilp_output_dir
+                )
 
     def post_process_ilp(self, ilp_forecast: List[List[List[int]]]) -> List[Tuple[bool, int, int, int, int]]:
         actions = []

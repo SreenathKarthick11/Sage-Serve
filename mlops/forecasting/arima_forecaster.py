@@ -5,8 +5,10 @@ import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 
 
-TRACE_PATH = Path("traces/random_trace.csv")
-OUTPUT_DIR = Path("traces/forecasts")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+TRACE_PATH = PROJECT_ROOT / "data" / "traces" / "random_trace.csv"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "traces" / "forecasts"
 
 ARIMA_ORDER = (1, 1, 1)
 
