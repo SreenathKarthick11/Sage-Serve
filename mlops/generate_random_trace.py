@@ -2,11 +2,13 @@ import os
 import random
 # request_id,batch,id,client_tenant,request_type,scenario,sla,utility,regions,model_type,workload_type,application_id,arrival_timestamp,batch_size,prompt_size,token_size
 
+OUTPUT_FILE_PATH='../data/traces/random_trace.csv'
+
 def main():
-    num_requests = 259200 # changed from 5000
+    num_requests = 5000 # changed from 5000
     batch_idx = 0
     num_regions = 3
-    with open('traces/random_trace.csv', 'w') as f:
+    with open(OUTPUT_FILE_PATH, 'w') as f:
         f.write(f"request_id,batch_id,client_tenant,request_type,scenario,sla,utility,regions,model_type,workload_type,application_id,arrival_timestamp,batch_size,prompt_size,token_size\n")
         for request_id in range(num_requests):
             client_tenant = random.randint(0, num_regions)

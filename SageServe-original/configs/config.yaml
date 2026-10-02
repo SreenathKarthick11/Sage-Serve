@@ -41,8 +41,8 @@ siloed: False
 choices: ${hydra:runtime.choices}
 # output_dir: results/${seed}/${start_state.state_type}/${trace.filename}/${cluster.servers.0.count}_${cluster.servers.1.count}/${applications.0.model_architecture}/${applications.0.scheduler}
 # output_dir: results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/
-output_dir: results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/lts_${long_term_scaling}_sts${short_term_scaling}/arbiter_${controller.regions.0.arbiter}/
-
+# output_dir: results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/lts_${long_term_scaling}_sts${short_term_scaling}/arbiter_${controller.regions.0.arbiter}/
+output_dir: ../experiments/results/${seed}/${trace.filename}/feed_async_${feed_async}/feed_async_granularity_${feed_async_granularity}/scaling_level_${scaling_level}/scaling_interval_${scaling_interval}/lts_${long_term_scaling}_sts${short_term_scaling}/arbiter_${controller.regions.0.arbiter}/
 hydra:
   # changes the cwd to the output directory
   run:

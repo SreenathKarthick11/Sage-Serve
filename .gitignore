@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+mlops/.venv/
+SageServe-original/.venv/
+
+# OS
+.DS_Store
+
+# Generated experiment artifacts
+experiments/ilp_outputs/*
+experiments/results/*
+
+# Generated traces
+data/traces/*

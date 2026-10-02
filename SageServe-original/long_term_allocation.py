@@ -97,11 +97,11 @@ class MilpLongTermAllocation(LongTermAllocation):
             "Cost of changing GPUs"
         )
         if path:
-            output_dir = Path(path).resolve().parents[1] / "ilp_outputs"
+            output_dir = Path(path)
             output_dir.mkdir(parents=True, exist_ok=True)
 
             prob.writeLP(str(output_dir / f"my_output_at_{clock()}.lp"))
-            
+
         prob.solve(PULP_CBC_CMD(msg=0))
         prob.roundSolution()
 
