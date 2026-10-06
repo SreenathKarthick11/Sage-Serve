@@ -12,4 +12,8 @@
 ## TODO
 
 - [] Verify other are able to setup and run the current code base.
-- [] Divide work with deadline.
+- [x] Divide work with deadline.
+
+> [!NOTE]
+> All the tasks are divided in the github issues.
+
