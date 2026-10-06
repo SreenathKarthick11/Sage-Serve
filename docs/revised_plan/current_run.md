@@ -8,9 +8,14 @@ From the repository root:
 
 ```bash
 cd ~/repos/Sage-Serve
-source mlops/.venv/bin/activate
-python mlops/generate_random_trace.py
+cd mlops
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python generate_random_trace.py
 ```
+
+> IF file not found error : Create dir `data/traces` in root.
 
 This generates:
 
@@ -25,7 +30,7 @@ data/traces/random_trace.csv
 Keep the MLOps environment active:
 
 ```bash
-python mlops/forecasting/arima_forecaster.py
+python forecasting/arima_forecaster.py
 ```
 
 Forecasts are generated under:
@@ -36,6 +41,19 @@ data/traces/forecasts/
 
 ---
 
+
+Installed `pyenv`, then: (check chatgpt)
+
+```bash
+pyenv install 3.11.13
+```
+
+Inside the SageServe repository:
+
+```bash
+pyenv local 3.11.13
+```
+
 ## 3. Run SageServe Without Forecasting
 
 Switch to the SageServe environment:
@@ -43,7 +61,10 @@ Switch to the SageServe environment:
 ```bash
 deactivate
 cd SageServe-original
+python -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+pip install hydra
 ```
 
 Run the simulator:
