@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 TRACE_PATH = (PROJECT_ROOT/ "data"/ "traces"/ "random_trace.csv")
 
-OUTPUT_PATH = (PROJECT_ROOT/ "data"/ "traces"/ "validated"/ "forecasting_input_dataset.csv")
+OUTPUT_PATH = (PROJECT_ROOT/ "data"/ "traces"/ "validated"/ "validated_workload_trace.csv")
 
 
 def main() -> None:
