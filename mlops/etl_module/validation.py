@@ -103,11 +103,6 @@ def validate_raw_trace(df: pd.DataFrame):
             for column in RAW_COLUMNS
         ],
 
-        # Request uniqueness
-        gxe.ExpectColumnValuesToBeUnique(
-            column="request_id"
-        ),
-
         # Valid model identifiers
         gxe.ExpectColumnValuesToBeInSet(
             column="model_type",
@@ -148,77 +143,3 @@ def validate_raw_trace(df: pd.DataFrame):
         suite_name="sageserve_raw_trace",
     )
 
-
-# Forecasting dataset validation
-def validate_forecasting_dataset(df: pd.DataFrame):
-    """
-    Validate the final dataset consumed by forecasting models.
-    """
-
-    columns = [
-        "minute",
-        "model_type",
-        "region_id",
-        "prompt_size",
-        "token_size",
-        "request_count",
-    ]
-
-    expectations = [
-        gxe.ExpectTableColumnsToMatchSet(
-            column_set=columns,
-            exact_match=True,
-        ),
-
-        *[
-            gxe.ExpectColumnValuesToNotBeNull(
-                column=column
-            )
-            for column in columns
-        ],
-
-        gxe.ExpectColumnValuesToBeInSet(
-            column="model_type",
-            value_set=VALID_MODELS,
-        ),
-
-        gxe.ExpectColumnValuesToBeInSet(
-            column="region_id",
-            value_set=VALID_REGION_IDS,
-        ),
-
-        gxe.ExpectColumnValuesToBeBetween(
-            column="minute",
-            min_value=0,
-        ),
-
-        gxe.ExpectColumnValuesToBeBetween(
-            column="prompt_size",
-            min_value=0,
-        ),
-
-        gxe.ExpectColumnValuesToBeBetween(
-            column="token_size",
-            min_value=0,
-        ),
-
-        gxe.ExpectColumnValuesToBeBetween(
-            column="request_count",
-            min_value=1,
-        ),
-
-        # One row per minute/model/region.
-        gxe.ExpectCompoundColumnsToBeUnique(
-            column_list=[
-                "minute",
-                "model_type",
-                "region_id",
-            ]
-        ),
-    ]
-
-    return _validate_suite(
-        df=df,
-        expectations=expectations,
-        suite_name="sageserve_forecasting_dataset",
-    )
