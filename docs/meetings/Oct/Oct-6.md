@@ -11,7 +11,7 @@
 
 ## TODO
 
-- [] Verify other are able to setup and run the current code base.
+- [x] Verify other are able to setup and run the current code base.
 - [x] Divide work with deadline.
 
 > [!NOTE]
