@@ -16,7 +16,7 @@
 
 ## TODO
 
-- [] Update on tasks
-- [] Update the GitHub Issues
+- [x] Update on tasks
+- [x] Update the GitHub Issues by adding comments.
 
 
