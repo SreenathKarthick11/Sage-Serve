@@ -34,33 +34,27 @@ PEAK_RPS = {
 #   weekend : how much of the hump is left on Sat/Sun (for NIW: the flat level on the weekend)
 #   ramp    : hump height Mon..Fri (IW-N grows towards Friday)
 #   noise   : std-dev of the random hour-to-hour wobble
+#   day_noise : std-dev of the day-to-day change in hump height (also shifts/reshapes the hump)
 TIERS = {
-    "IW-F": dict(sla=1,     utility=3, daily=True,  floor=0.03, weekend=0.08, ramp=[1, 1, 1, 1, 1],            noise=0.05),
-    "IW-N": dict(sla=60,    utility=2, daily=True,  floor=0.35, weekend=0.10, ramp=[0.8, 0.85, 1, 1.05, 1.1], noise=0.12),
-    "NIW":  dict(sla=86400, utility=1, daily=False, floor=1.0,  weekend=0.75, ramp=[1, 1, 1, 1, 1],            noise=0.30),
+    "IW-F": dict(sla=1,     utility=3, daily=True,  floor=0.03, weekend=0.08, ramp=[1, 1, 1, 1, 1],            noise=0.08, day_noise=0.12),
+    "IW-N": dict(sla=60,    utility=2, daily=True,  floor=0.35, weekend=0.10, ramp=[0.8, 0.85, 1, 1.05, 1.1], noise=0.12, day_noise=0.09),
+    "NIW":  dict(sla=86400, utility=1, daily=False, floor=1.0,  weekend=0.75, ramp=[1, 1, 1, 1, 1],            noise=0.30, day_noise=0.0),
 }
 
 BURST_EVERY_S = 3 * 3600    # on average one IW traffic spike per 3 simulated hours
 BATCH_EVERY_S = 2 * 3600    # on average one NIW batch drop per 2 simulated hours
 
 
-def _hump_raw(h):
-    # two overlapping peaks (~10:00 and ~15:30) with a small dip around lunch
-    return math.exp(-0.5 * ((h - 10) / 1.9) ** 2) + 0.9 * math.exp(-0.5 * ((h - 15.5) / 2.1) ** 2)
+def _hump_raw(h, shift=0.0, balance=1.0):
+    # two overlapping peaks (~10:00 and ~15:30) with a dip around lunch.
+    # `shift` slides the whole hump (hours); `balance` > 1 makes the morning peak taller than the afternoon one.
+    return (balance * math.exp(-0.5 * ((h - shift - 10) / 1.9) ** 2)
+            + 0.9 / balance * math.exp(-0.5 * ((h - shift - 15.5) / 2.1) ** 2))
 
 
 _HUMP_MAX = max(_hump_raw(h / 10) for h in range(240))
 
 
-def shape(tier, t):
-    """Traffic level at time t as a fraction of the tier's peak (about 0..1)."""
-    p = TIERS[tier]
-    day, hour = int(t // 86400) % 7, (t % 86400) / 3600
-    weekend = day >= 5
-    if not p["daily"]:
-        return p["weekend"] if weekend else 1.0
-    height = p["weekend"] if weekend else p["ramp"][day]
-    return p["floor"] + (1 - p["floor"]) * height * _hump_raw(hour) / _HUMP_MAX
 
 
 # ---------------------------------------------------------------------------------------------
@@ -83,6 +77,7 @@ class Workload:
         self.next_request_id = 0
         self.next_batch_id = 0
         self.wobble = {}                        # (tier, region, model, hour) -> random multiplier
+        self.day_cache = {}                     # random per-day variation, drawn once per day
         self.bursts = []                        # spikes currently active
         self.events = []                        # messages about new bursts/batches (for printing)
         # NIW batch drops mostly hit the busiest NIW endpoints
@@ -91,13 +86,35 @@ class Workload:
         self.niw_probs = _norm(w)
 
     # ---- arrival rate ---------------------------------------------------------------------
+    def _day_params(self, tier, region, model, day):
+        """Random day-to-day variation so no two days look identical: (height, time shift, balance)."""
+        rng, sigma = self.rng, TIERS[tier]["day_noise"]
+        if (tier, day) not in self.day_cache:           # a 'busy day' effect shared by all of a tier's streams
+            self.day_cache[(tier, day)] = math.exp(rng.normal(0, sigma))
+        key = (tier, region, model, day)
+        if key not in self.day_cache:
+            height = self.day_cache[(tier, day)] * math.exp(rng.normal(0, sigma / 2))
+            self.day_cache[key] = (height, rng.normal(0, 0.5), math.exp(rng.normal(0, 0.2)))
+        return self.day_cache[key]
+
+    def shape(self, tier, region, model, t):
+        """Traffic level at time t as a fraction of the stream's peak (about 0..1)."""
+        p = TIERS[tier]
+        day, hour = int(t // 86400), (t % 86400) / 3600
+        weekend = day % 7 >= 5
+        if not p["daily"]:
+            return p["weekend"] if weekend else 1.0
+        height, shift, balance = self._day_params(tier, region, model, day)
+        height *= p["weekend"] if weekend else p["ramp"][day % 7]
+        return p["floor"] + (1 - p["floor"]) * height * _hump_raw(hour, shift, balance) / _HUMP_MAX
+
     def rate(self, tier, region, mi, t):
         """Expected requests per simulated second for one (tier, region, model) stream."""
         model = MODELS[mi]
         hour_key = (tier, region, model, int(t // 3600))
         if hour_key not in self.wobble:
             self.wobble[hour_key] = math.exp(self.rng.normal(0, TIERS[tier]["noise"]))
-        r = PEAK_RPS[tier][region][mi] * self.scale * shape(tier, t) * self.wobble[hour_key]
+        r = PEAK_RPS[tier][region][mi] * self.scale * self.shape(tier, region, model, t) * self.wobble[hour_key]
         for b in self.bursts:                   # active spikes multiply the rate, fading out linearly
             if b["tier"] == tier and b["region"] == region and b["model"] in (None, model):
                 left = 1 - min(1.0, max(0.0, (t - b["start"]) / b["duration"]))
