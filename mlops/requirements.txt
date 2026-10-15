@@ -11,3 +11,7 @@ six==1.17.0
 statsmodels==0.15.0
 typing_extensions==4.16.0
 wrapt==2.5.0
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27
+matplotlib>=3.8
