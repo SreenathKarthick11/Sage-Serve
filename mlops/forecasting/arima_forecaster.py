@@ -1,418 +1,188 @@
-from pathlib import Path
+"""
+mlops/forecasting/arima_forecaster.py
 
+ARIMA implementation of the BaseForecaster interface.
+Preserves full walk-forward trace generation and zero-forecast fallback
+as expected by SageServe.
+"""
+
+import os
+from typing import Any, Dict, List, Union
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
+import yaml
+
+from mlops.forecasting.base import BaseForecaster
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+class ARIMAForecaster(BaseForecaster):
+    """
+    ARIMA Forecaster implementing walk-forward and future recursive forecasting
+    for SageServe workload prediction.
+    """
 
-TRACE_PATH = PROJECT_ROOT / "data" / "traces" / "validated" / "validated_workload_trace.csv"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "traces" / "forecasts"
+    def __init__(self, config_path: str, weights_path: Union[str, None] = None) -> None:
+        if not os.path.exists(config_path):     # basic check for existence of config file
+            raise FileNotFoundError(f"ARIMA config file not found at: {config_path}")
 
-ARIMA_ORDER = (1, 1, 1)
+        with open(config_path, "r") as f:
+            self.config: Dict[str, Any] = yaml.safe_load(f)
 
-BUCKET_SECONDS = 60
-TRAIN_WINDOW = 60
+        self.model_info = self.config.get("model_info", {})
+        self.parameters = self.config.get("parameters", {})
 
-# Forecast 61 future minutes so that the long-term
-# 20-60 minute look-ahead is fully covered.
-FUTURE_HORIZON = 61
+        # Hyperparameters from config.yaml
+        order_dict = self.parameters.get("order", {"p": 1, "d": 1, "q": 1})     # these are specific to ARIMA
+        self.order = (order_dict["p"], order_dict["d"], order_dict["q"])
+        self.train_window = self.parameters.get("train_window_mins", 60)    # default 60 for 60 minutes
+        self.future_horizon = self.parameters.get("future_horizon", 61)
+        self.bucket_seconds = self.parameters.get("bucket_seconds", 60)
+        self.config_path = config_path
 
-# Regions configured in SageServe.
-REGIONS = [0, 1, 2]
+    def _fit_arima_internal(self, history_series: pd.Series):
+        """Helper to fit statsmodels ARIMA on a history window. This window not necessarily 60 minutes"""
+        try:
+            model = ARIMA(history_series, order=self.order)
+            return model.fit()
+        except Exception:
+            return None
 
-
-def load_trace():
-    if not TRACE_PATH.exists():
-        raise FileNotFoundError(
-            f"Trace not found: {TRACE_PATH.resolve()}"
+    def generate_zero_forecast(self, last_observed_minute: int) -> pd.DataFrame:
+        """
+        Generates a zero-filled forecast DataFrame when no workload is found.
+        Matches original SageServe specification.
+        """
+        future_minutes = np.arange(
+            1,
+            last_observed_minute + self.future_horizon + 1
         )
+        
+        return pd.DataFrame({
+            "Time": future_minutes * self.bucket_seconds,
+            "Predicted": 0.0
+        })
 
-    df = pd.read_csv(TRACE_PATH)
+    def predict(
+        self, 
+        input_data: Union[List[float], np.ndarray, pd.Series],
+        return_dataframe: bool = False,
+        last_observed_minute: Union[int, None] = None
+    ) -> Union[np.ndarray, pd.DataFrame]:
+        """
+        Generates forecast predictions.
 
-    required = [
-        "arrival_timestamp",
-        "model_type",
-        "regions",
-        "prompt_size",
-    ]
+        Args:
+            input_data: Time series workload data.
+            return_dataframe (bool): If True, returns DataFrame with ['Time', 'Predicted']
+                                     columns for saving directly to CSV.
+            last_observed_minute (int, optional): Explicit last observed minute for zero/trace forecasts.
 
-    missing = [
-        column for column in required
-        if column not in df.columns
-    ]
-
-    if missing:
-        raise ValueError(
-            f"Missing required columns: {missing}"
-        )
-
-    return df
-
-
-def get_source_region(region_code):
-    """
-    Extract the first-priority region from the three-region
-    priority encoding.
-
-    Examples:
-        012 -> 0
-        021 -> 0
-        102 -> 1
-        120 -> 1
-        201 -> 2
-        210 -> 2
-    """
-
-    value = str(region_code).zfill(3)
-
-    return int(value[0])
-
-
-def build_series(df, model_name, region_id):
-    """
-    Build one-minute prompt-token demand for a model and region.
-
-    The current SageServe ARIMA checking code adds prompt_size for
-    every request that reaches the model endpoint, so this signal
-    uses all rows in the trace rather than filtering by workload_type.
-    """
-
-    subset = df[
-        (df["model_type"] == model_name)
-        & (
-            df["regions"].apply(get_source_region)
-            == region_id
-        )
-    ].copy()
-
-    if subset.empty:
-        return pd.Series(dtype=float)
-
-    subset["minute"] = (
-        subset["arrival_timestamp"]
-        // BUCKET_SECONDS
-    )
-
-    tokens_per_minute = (
-        subset
-        .groupby("minute")["prompt_size"]
-        .sum()
-        .sort_index()
-    )
-
-    full_index = pd.RangeIndex(
-        tokens_per_minute.index.min(),
-        tokens_per_minute.index.max() + 1,
-        name="minute",
-    )
-
-    tokens_per_minute = (
-        tokens_per_minute
-        .reindex(full_index, fill_value=0)
-        .astype(float)
-    )
-
-    return tokens_per_minute
-
-
-def fit_arima(series):
-    """
-    Fit the configured ARIMA model.
-    """
-
-    model = ARIMA(
-        series.astype(float),
-        order=ARIMA_ORDER,
-        enforce_stationarity=False,
-        enforce_invertibility=False,
-    )
-
-    return model.fit()
-
-
-def generate_forecast(series):
-    """
-    Generate one-step-ahead forecasts over the observed trace,
-    followed by FUTURE_HORIZON recursive forecasts.
-
-    A full 60-minute ARIMA history is available starting at
-    target minute 60.
-
-    To avoid refitting thousands of ARIMA models, parameters are
-    refitted every TRAIN_WINDOW minutes. Between refits, the fitted
-    model is updated with newly observed values.
-    """
-
-    series = series.astype(float)
-
-    last_observed_minute = int(series.index.max())
-
-    forecasts = {}
-
-    fitted = None
-
-    # ---------------------------------------------------------
-    # Warm-up + walk-forward forecasting
-    # ---------------------------------------------------------
-
-    for target_minute in range(
-        1,
-        last_observed_minute + 1
-    ):
-
-        history_end = target_minute
-
-        history_start = max(
-            0,
-            history_end - TRAIN_WINDOW
-        )
-
-        history = series.loc[
-            history_start:history_end - 1
-        ]
-
-        # -----------------------------------------------------
-        # Warm-up period (< 60 minutes)
-        # -----------------------------------------------------
-
-        if target_minute < TRAIN_WINDOW:
-
-            if len(history) == 0:
-                prediction = 0.0
-            else:
-                # Simple causal fallback until enough history
-                # exists for ARIMA.
-                prediction = float(history.mean())
-
+        Returns:
+            Union[np.ndarray, pd.DataFrame]: Forecasted values.
+        """
+        # for uniformity convert to pd Series
+        if isinstance(input_data, pd.Series):
+            series = input_data.astype(float).copy()
         else:
+            series = pd.Series(np.asarray(input_data, dtype=float))
 
-            # -------------------------------------------------
-            # Refit once per 60 minutes
-            # -------------------------------------------------
+        # Handle empty series / zero forecast case
+        if series.empty:
+            obs_min = last_observed_minute if last_observed_minute is not None else 60
+            zero_df = self.generate_zero_forecast(obs_min)
+            return zero_df if return_dataframe else zero_df["Predicted"].values
 
-            if (
-                fitted is None
-                or target_minute % TRAIN_WINDOW == 0
-            ):
+        # Case 1: Real-time single 60-min window input (returns array)
+        if len(series) <= self.train_window and not return_dataframe:
+            fitted = self._fit_arima_internal(series)
+            if fitted is not None:
+                try:
+                    raw_preds = fitted.forecast(steps=self.future_horizon)
+                    return np.maximum(0.0, np.asarray(raw_preds, dtype=np.float32))
+                except Exception:
+                    pass
+            # case when fitted is none, means corrupted data or insufficient points available
+            mean_val = max(0.0, float(series.mean())) if len(series) > 0 else 0.0
+            return np.full((self.future_horizon,), fill_value=mean_val, dtype=np.float32)
 
-                history = series.loc[
-                    target_minute - TRAIN_WINDOW:
-                    target_minute - 1
-                ]
+        # Case 2: Walk-forward trace execution (original generate_forecast logic)
+        obs_min = last_observed_minute if last_observed_minute is not None else int(series.index.max())
+        forecasts = {}
+        fitted = None
 
-                fitted = fit_arima(history)
+        # 1. Warm-up + Walk-forward loop over observed trace
+        for target_minute in range(1, obs_min + 1):
+            history_start = max(0, target_minute - self.train_window)
+            history = series.loc[history_start : target_minute - 1]
 
-            # -------------------------------------------------
-            # Predict next minute
-            # -------------------------------------------------
-
-            prediction = float(
-                fitted.forecast(steps=1).iloc[0]
-            )
-
-            prediction = max(
-                0.0,
-                prediction,
-            )
-
-        forecasts[target_minute] = prediction
-
-        # -----------------------------------------------------
-        # Update model with the newly observed value
-        # -----------------------------------------------------
-
-        if fitted is not None:
-
-            actual_value = float(
-                series.loc[target_minute]
-            )
-
-            fitted = fitted.append(
-                [actual_value],
-                refit=False,
-            )
-
-    # ---------------------------------------------------------
-    # Future forecast after the trace ends
-    # ---------------------------------------------------------
-
-    final_history = series.iloc[-TRAIN_WINDOW:]
-
-    if len(final_history) >= TRAIN_WINDOW:
-
-        fitted = fit_arima(
-            final_history
-        )
-
-        future_predictions = (
-            fitted
-            .forecast(
-                steps=FUTURE_HORIZON
-            )
-        )
-
-        first_future_minute = (
-            last_observed_minute + 1
-        )
-
-        for offset, prediction in enumerate(
-            future_predictions,
-            start=0,
-        ):
-
-            minute = (
-                first_future_minute
-                + offset
-            )
-
-            forecasts[minute] = max(
-                0.0,
-                float(prediction),
-            )
-
-    forecast_series = pd.Series(
-        forecasts,
-        dtype=float,
-    )
-
-    forecast_series.index.name = "minute"
-
-    return forecast_series
-
-
-def generate_zero_forecast(
-    last_observed_minute
-):
-    """
-    Used when a model/region has no workload.
-    """
-
-    future_minutes = np.arange(
-        1,
-        last_observed_minute
-        + FUTURE_HORIZON
-        + 1,
-    )
-
-    return pd.DataFrame({
-        "Time":
-            future_minutes
-            * BUCKET_SECONDS,
-
-        "Predicted": 0.0,
-    })
-
-
-def main():
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    df = load_trace()
-
-    models = sorted(
-        df["model_type"].unique()
-    )
-
-    last_observed_minute = int(
-        df["arrival_timestamp"].max()
-        // BUCKET_SECONDS
-    )
-
-    print("Models:", models)
-    print("Regions:", REGIONS)
-    print(
-        "Last observed minute:",
-        last_observed_minute,
-    )
-
-    print(
-        "Last observed timestamp:",
-        df["arrival_timestamp"].max(),
-    )
-
-    for model_name in models:
-
-        for region_id in REGIONS:
-
-            print()
-            print(
-                f"Generating forecast: "
-                f"model={model_name}, "
-                f"region={region_id}"
-            )
-
-            series = build_series(
-                df,
-                model_name,
-                region_id,
-            )
-
-            if series.empty:
-
-                print(
-                    "  No workload found. "
-                    "Using zero forecast."
-                )
-
-                forecast = (
-                    generate_zero_forecast(
-                        last_observed_minute
-                    )
-                )
-
+            if target_minute < self.train_window:   # case when not enough data points there
+                prediction = 0.0 if len(history) == 0 else float(history.mean())
             else:
+                if fitted is None or target_minute % self.train_window == 0:
+                    # fit on the window only
+                    history = series.loc[target_minute - self.train_window : target_minute - 1]
+                    fitted = self._fit_arima_internal(history)
 
-                print(
-                    "  Historical observations:",
-                    len(series),
-                )
+                if fitted is not None:
+                    try:
+                        pred_val = float(fitted.forecast(steps=1).iloc[0])
+                        prediction = max(0.0, pred_val)
+                    except Exception:
+                        prediction = max(0.0, float(history.mean()))
+                else:
+                    prediction = max(0.0, float(history.mean()))
 
-                print(
-                    "  Total prompt tokens:",
-                    int(series.sum()),
-                )
+            forecasts[target_minute] = prediction
 
-                forecast_series = (
-                    generate_forecast(series)
-                )
+            if fitted is not None and target_minute in series.index:
+                actual_value = float(series.loc[target_minute])
+                try:
+                    fitted = fitted.append([actual_value], refit=False)
+                except Exception:
+                    pass
 
-                forecast = pd.DataFrame({
-                    "Time":
-                        forecast_series.index
-                        .astype(int)
-                        * BUCKET_SECONDS,
+        # 2. Recursive future forecasting past trace end
+        final_history = series.iloc[-self.train_window :]
 
-                    "Predicted":
-                        forecast_series.values,
-                })
+        if len(final_history) >= self.train_window:
 
-            output_path = (
-                OUTPUT_DIR
-                / (
-                    f"forecast_"
-                    f"{model_name}_"
-                    f"region{region_id}.csv"
-                )
-            )
+            fitted_final = self._fit_arima_internal(final_history)
 
-            forecast.to_csv(
-                output_path,
-                index=False,
-            )
+            if fitted_final is not None:
+                try:
+                    future_preds = fitted_final.forecast(steps=self.future_horizon)
+                    for offset, pred in enumerate(future_preds):
+                        forecasts[obs_min + 1 + offset] = max(0.0, float(pred))
 
-            print(
-                f"  Saved {output_path} "
-                f"({len(forecast)} rows)"
-            )
+                except Exception:
+                    last_val = max(0.0, float(final_history.iloc[-1]))
+                    for offset in range(self.future_horizon):
+                        forecasts[obs_min + 1 + offset] = last_val
+                        
+            else:
+                last_val = max(0.0, float(final_history.iloc[-1]))
+                for offset in range(self.future_horizon):
+                    forecasts[obs_min + 1 + offset] = last_val
 
-    print()
-    print("Forecast generation completed.")
+        # Construct final output Series
+        forecast_series = pd.Series(forecasts, dtype=float)
+        forecast_series.index.name = "minute"
 
+        if return_dataframe:
+            return pd.DataFrame({
+                "Time": forecast_series.index.astype(int) * self.bucket_seconds,
+                "Predicted": forecast_series.values
+            })
 
-if __name__ == "__main__":
-    main()
+        return forecast_series.values
+
+    def get_metadata(self) -> Dict[str, Any]:
+        return {
+            "model_type": self.model_info.get("type", "arima"),
+            "version": self.model_info.get("version", "v1"),
+            "order": self.order,
+            "train_window": self.train_window,
+            "future_horizon": self.future_horizon,
+            "config_path": self.config_path,
+        }
