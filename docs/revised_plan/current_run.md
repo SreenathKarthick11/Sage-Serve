@@ -47,7 +47,7 @@ Sage-Serve/                         ← repo root
 
 Every artifact is an **immutable directory** inside `data/<source>/<stage>/<version>/`.
 
-| Stage      | Version ID derivation                                  |
+| Stage      | Version ID derivation                                 |
 |------------|-------------------------------------------------------|
 | `raw`      | `SHA-256(file content)[:12]`                          |
 | `clean`    | `SHA-256({raw artifact id, CLEAN_PARAMS})[:12]`       |
