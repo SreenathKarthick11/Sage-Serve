@@ -17,3 +17,8 @@ experiments/results/*
 data/traces/*
 data/
 .trashyard
+
+## Inferences
+
+mlops/inference/*.csv
+mlops/inference/plots/
