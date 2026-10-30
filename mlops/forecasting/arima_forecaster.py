@@ -1,14 +1,32 @@
+"""ARIMA forecaster. Reads a versioned clean trace, writes a versioned set of forecasts.
+
+    python -m forecasting.arima_forecaster --source streaming                 # latest clean version
+    python -m forecasting.arima_forecaster --source static --input-version <id>
+
+Output: data/<source>/forecasts/<version>/forecast_<model>_region<r>.csv  (+ manifest.json)
+The forecast version id is derived from (clean artifact id, FORECAST_PARAMS).
+"""
+import argparse
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 
+from pipeline.paths import SOURCES
+from pipeline.versioning import (
+    artifact_id,
+    derive_id,
+    finalize,
+    new_tmp_dir,
+    resolve_version,
+    set_latest,
+    version_dir,
+    version_exists,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-TRACE_PATH = PROJECT_ROOT / "data" / "traces" / "validated" / "validated_workload_trace.csv"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "traces" / "forecasts"
+CLEAN_FILE = "validated_trace.csv"
 
 ARIMA_ORDER = (1, 1, 1)
 
@@ -22,14 +40,26 @@ FUTURE_HORIZON = 61
 # Regions configured in SageServe.
 REGIONS = [0, 1, 2]
 
+# Everything that influences the numbers; part of the forecast version id.
+FORECAST_PARAMS = {
+    "arima_order": list(ARIMA_ORDER),
+    "bucket_seconds": BUCKET_SECONDS,
+    "train_window": TRAIN_WINDOW,
+    "future_horizon": FUTURE_HORIZON,
+    "regions": REGIONS,
+    "enforce_stationarity": False,
+    "enforce_invertibility": False,
+}
 
-def load_trace():
-    if not TRACE_PATH.exists():
+
+def load_trace(trace_path: Path):
+    if not trace_path.exists():
         raise FileNotFoundError(
-            f"Trace not found: {TRACE_PATH.resolve()}"
+            f"Trace not found: {trace_path.resolve()}"
         )
 
-    df = pd.read_csv(TRACE_PATH)
+    # `regions` as string keeps leading zeros ("012"), instead of relying on zfill later.
+    df = pd.read_csv(trace_path, dtype={"regions": "string"})
 
     required = [
         "arrival_timestamp",
@@ -305,14 +335,22 @@ def generate_zero_forecast(
     })
 
 
-def main():
+def run_forecast(clean_dir: Path, source: str) -> Path:
+    """Generate forecasts for every (model, region) from one clean version.
 
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    clean_dir : data/<source>/clean/<version>/
+    returns   : data/<source>/forecasts/<version>/
+    """
 
-    df = load_trace()
+    clean_id = artifact_id(source, "clean", clean_dir.name)
+    version_id = derive_id([clean_id], FORECAST_PARAMS)
+
+    if version_exists(source, "forecasts", version_id):
+        print(f"Forecast version {version_id} already exists for {clean_id}; skipping.")
+        set_latest(source, "forecasts", version_id)
+        return version_dir(source, "forecasts", version_id)
+
+    df = load_trace(clean_dir / CLEAN_FILE)
 
     models = sorted(
         df["model_type"].unique()
@@ -335,83 +373,110 @@ def main():
         df["arrival_timestamp"].max(),
     )
 
-    for model_name in models:
+    tmp_dir = new_tmp_dir(source, "forecasts")
+    try:
+        n_files = 0
+        for model_name in models:
 
-        for region_id in REGIONS:
+            for region_id in REGIONS:
 
-            print()
-            print(
-                f"Generating forecast: "
-                f"model={model_name}, "
-                f"region={region_id}"
-            )
-
-            series = build_series(
-                df,
-                model_name,
-                region_id,
-            )
-
-            if series.empty:
-
+                print()
                 print(
-                    "  No workload found. "
-                    "Using zero forecast."
+                    f"Generating forecast: "
+                    f"model={model_name}, "
+                    f"region={region_id}"
                 )
 
-                forecast = (
-                    generate_zero_forecast(
-                        last_observed_minute
+                series = build_series(
+                    df,
+                    model_name,
+                    region_id,
+                )
+
+                if series.empty:
+
+                    print(
+                        "  No workload found. "
+                        "Using zero forecast."
+                    )
+
+                    forecast = (
+                        generate_zero_forecast(
+                            last_observed_minute
+                        )
+                    )
+
+                else:
+
+                    print(
+                        "  Historical observations:",
+                        len(series),
+                    )
+
+                    print(
+                        "  Total prompt tokens:",
+                        int(series.sum()),
+                    )
+
+                    forecast_series = (
+                        generate_forecast(series)
+                    )
+
+                    forecast = pd.DataFrame({
+                        "Time":
+                            forecast_series.index
+                            .astype(int)
+                            * BUCKET_SECONDS,
+
+                        "Predicted":
+                            forecast_series.values,
+                    })
+
+                output_path = (
+                    tmp_dir
+                    / (
+                        f"forecast_"
+                        f"{model_name}_"
+                        f"region{region_id}.csv"
                     )
                 )
 
-            else:
+                forecast.to_csv(
+                    output_path,
+                    index=False,
+                )
+                n_files += 1
 
                 print(
-                    "  Historical observations:",
-                    len(series),
+                    f"  Saved {output_path.name} "
+                    f"({len(forecast)} rows)"
                 )
 
-                print(
-                    "  Total prompt tokens:",
-                    int(series.sum()),
-                )
-
-                forecast_series = (
-                    generate_forecast(series)
-                )
-
-                forecast = pd.DataFrame({
-                    "Time":
-                        forecast_series.index
-                        .astype(int)
-                        * BUCKET_SECONDS,
-
-                    "Predicted":
-                        forecast_series.values,
-                })
-
-            output_path = (
-                OUTPUT_DIR
-                / (
-                    f"forecast_"
-                    f"{model_name}_"
-                    f"region{region_id}.csv"
-                )
-            )
-
-            forecast.to_csv(
-                output_path,
-                index=False,
-            )
-
-            print(
-                f"  Saved {output_path} "
-                f"({len(forecast)} rows)"
-            )
+        details = {
+            "n_forecast_files": n_files,
+            "models": [str(m) for m in models],
+            "last_observed_minute": last_observed_minute,
+        }
+        final = finalize(tmp_dir, source, "forecasts", version_id, parents=[clean_id],
+                         params=FORECAST_PARAMS, details=details)
+    except BaseException:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
     print()
-    print("Forecast generation completed.")
+    print(f"Forecast generation completed -> {final}")
+    return final
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate versioned ARIMA forecasts from a clean trace version.")
+    parser.add_argument("--source", required=True, choices=SOURCES)
+    parser.add_argument("--input-version", default="latest",
+                        help="clean version id, or 'latest' (default: %(default)s)")
+    args = parser.parse_args()
+
+    clean_dir = resolve_version(args.source, "clean", args.input_version)
+    run_forecast(clean_dir, args.source)
 
 
 if __name__ == "__main__":
