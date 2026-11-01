@@ -258,7 +258,7 @@ def promote_model(
 
 def get_production_model(name: str, registry_dir: str = "mlops/model_registry") -> Optional[Dict[str, Any]]:
     """
-    Scan model directory `name` and return the manifest dictionary of the
+    Scan model directory 'name' and return the manifest dictionary of the
     version whose stage == "Production". Return None if no version is in Production.
     """
     base_models_dir = os.path.join(registry_dir, "models", name)
