@@ -4,7 +4,29 @@ from pathlib import Path
 
 import pandas as pd
 
+from pipeline.versioning import (
+    artifact_id,
+    derive_id,
+    finalize,
+    new_tmp_dir,
+    set_latest,
+    version_dir,
+    version_exists,
+)
+
 from .validation import validate_raw_trace
+
+# Bump CLEANING_VERSION whenever clean_trace() or the validation suite changes behaviour.
+# It is part of the clean-stage id, so a logic change yields a new version of the same raw input.
+CLEANING_VERSION = "1"
+CLEAN_PARAMS = {
+    "cleaning_version": CLEANING_VERSION,
+    "validation_suite": "sageserve_raw_trace",
+    "regions_zfill": 3,
+}
+
+RAW_FILE = "trace.csv"
+CLEAN_FILE = "validated_trace.csv"
 
 
 def load_trace(trace_path: Path) -> pd.DataFrame:
@@ -63,23 +85,50 @@ def clean_trace(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def run_etl( trace_path: Path, output_path: Path ) -> pd.DataFrame:
-    """
-    Execute the ETL pipeline.
 
-    The ETL preserves the original SageServe trace schema.
+def run_etl(input_dir: Path, source: str) -> Path:
+    """
+    Execute the ETL pipeline on one raw version.
+
+    input_dir : data/<source>/raw/<version>/   (contains trace.csv + manifest.json)
+    returns   : data/<source>/clean/<version>/ (contains validated_trace.csv + manifest.json)
+
+    The ETL preserves the original SageServe trace schema. The clean version id is
+    derived from (raw artifact id, CLEAN_PARAMS), so re-running on the same raw version
+    with the same logic is skipped.
     """
 
+    raw_id = artifact_id(source, "raw", input_dir.name)
+    version_id = derive_id([raw_id], CLEAN_PARAMS)
+
+    if version_exists(source, "clean", version_id):
+        print(f"Clean version {version_id} already exists for {raw_id}; skipping.")
+        set_latest(source, "clean", version_id)
+        return version_dir(source, "clean", version_id)
+
+    trace_path = input_dir / RAW_FILE
     print(f"Loading trace: {trace_path}")
     df = load_trace(trace_path)
-    print(f"Raw rows: {len(df)}")
+    rows_in = len(df)
+    print(f"Raw rows: {rows_in}")
 
     df = clean_trace(df)
-    validate_raw_trace(df)
+    result = validate_raw_trace(df)          # raises ValueError on failure
 
-    output_path.parent.mkdir(parents=True,exist_ok=True,)
-    df.to_csv(output_path,index=False)
+    tmp_dir = new_tmp_dir(source, "clean")
+    try:
+        df.to_csv(tmp_dir / CLEAN_FILE, index=False)
+        details = {
+            "rows_in": rows_in,
+            "rows_out": len(df),
+            "validation": {"suite": CLEAN_PARAMS["validation_suite"], "success": bool(result.success)},
+        }
+        final = finalize(tmp_dir, source, "clean", version_id, parents=[raw_id],
+                         params=CLEAN_PARAMS, details=details)
+    except BaseException:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
-    print(f"Validated forecasting input written to: "f"{output_path}")
-
-    return df
+    print(f"Validated forecasting input written to: {final / CLEAN_FILE}")
+    return final
