@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from mlops.forecasting.base import BaseForecaster
+from forecasting.base import BaseForecaster
 
 
 class HMMForecaster(BaseForecaster):

@@ -9,9 +9,9 @@ import json
 import os
 from typing import Optional
 
-from mlops.forecasting.arima_forecaster import ARIMAForecaster
-from mlops.forecasting.base import BaseForecaster
-from mlops.forecasting.hmm_forecaster import HMMForecaster
+from forecasting.arima_forecaster import ARIMAForecaster
+from forecasting.base import BaseForecaster
+from forecasting.hmm_forecaster import HMMForecaster
 # from mlops.forecasting.nn_forecaster import NNForecaster
 
 REGISTERED_MODELS = ["nn", "hmm", "arima"]      # should be read from a config or found out, no hard code
