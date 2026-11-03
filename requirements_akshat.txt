@@ -8,3 +8,4 @@ yaml
 json
 shutil
 datetime
+pyyaml

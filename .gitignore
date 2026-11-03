@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 
 # Virtual environments
+.venv
 mlops/.venv/
 SageServe-original/.venv/
 
