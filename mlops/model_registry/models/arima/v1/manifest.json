@@ -1,0 +1,21 @@
+{
+  "name": "arima",
+  "version_id": "v1",
+  "stage": "Production",
+  "metrics": {
+    "mae": 9.2
+  },
+  "created_at": "2026-11-04T09:48:02.024445+00:00",
+  "history": [
+    {
+      "from_stage": "None",
+      "to_stage": "Registered",
+      "at": "2026-11-04T09:48:02.024470+00:00"
+    },
+    {
+      "from_stage": "None",
+      "to_stage": "Production",
+      "at": "2026-11-04T09:58:01.087877+00:00"
+    }
+  ]
+}

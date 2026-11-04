@@ -9,6 +9,6 @@ parameters:
     d: 1
     q: 1
   train_window_mins: 60
-  future_horizon: 61
+  future_horizon: 60
   bucket_seconds: 60
   regions: [0, 1, 2]

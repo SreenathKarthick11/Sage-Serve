@@ -65,6 +65,9 @@ def register_model(
     version_id = _next_version_id(base_model_dir)
     target_dir = _model_dir(registry_dir, name, version_id)
 
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"model_path does not exist: {model_path}")
+
     os.makedirs(target_dir, exist_ok=True)
 
     # Copy model artifacts (e.g. weights, transition matrix, config) into version directory
