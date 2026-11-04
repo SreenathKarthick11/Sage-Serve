@@ -2,12 +2,12 @@ name: MLOps Unit Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, sreenath/ci-cd ]
     paths:
       - 'mlops/**'
       - '.github/workflows/mlops-unit-tests.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, sreenath/ci-cd ]
     paths:
       - 'mlops/**'
 
