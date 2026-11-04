@@ -8,23 +8,61 @@ generates time-series forecasts for the SageServe pipeline.
 
 import os
 import pickle
+import shutil
+from pathlib import Path
 from typing import Any, Dict, List, Union
+
 import numpy as np
 import pandas as pd
 import yaml
 
 from forecasting.base import BaseForecaster
-import shutil
-from pathlib import Path
 from forecasting.trace_io import load_clean_trace, safe_filename_part
 from pipeline.versioning import (
     artifact_id, derive_id, finalize, new_tmp_dir, set_latest, version_dir, version_exists,
 )
 
+
 class HMMForecaster(BaseForecaster):
     """
     Forecaster using a Hidden Markov Model (HMM) to predict future workload.
     """
+
+    REQUIRED_PARAMS = ["n_states", "train_window_mins", "future_horizon", "bucket_seconds"]
+    WEIGHTS_FILE = "transition_matrix.pkl"
+
+    @classmethod
+    def train(cls, config: dict, clean_dir):
+        """Learn state means and a transition matrix from a clean trace.
+
+        Output format matches what predict() already accepts:
+        {"transition_matrix": KxK array, "means": K list}
+        """
+        p = config["parameters"]
+        k = int(p["n_states"])
+        bucket = int(p.get("bucket_seconds", 60))
+
+        df = load_clean_trace(Path(clean_dir))
+        df["minute"] = (df["arrival_timestamp"] // bucket).astype(int)
+        per_min = df.groupby("minute")["prompt_size"].sum()
+        series = per_min.reindex(
+            range(int(per_min.index.min()), int(per_min.index.max()) + 1), fill_value=0.0
+        ).to_numpy(dtype=float)
+        if series.size < k * 3:
+            raise ValueError(f"Not enough minutes of data ({series.size}) to train {k} states.")
+
+        # States = workload quantile bins, low to high
+        edges = np.quantile(series, np.linspace(0, 1, k + 1)[1:-1])
+        states = np.digitize(series, edges)
+        means = [float(series[states == s].mean()) if np.any(states == s) else 0.0
+                 for s in range(k)]
+
+        counts = np.full((k, k), 1e-6)
+        for a, b in zip(states[:-1], states[1:]):
+            counts[a, b] += 1
+        trans = counts / counts.sum(axis=1, keepdims=True)
+
+        return {"transition_matrix": trans, "means": means}
 
     def __init__(self, config_path: str, weights_path: Union[str, None] = None) -> None:
         if not os.path.exists(config_path):     # check path
@@ -43,7 +81,7 @@ class HMMForecaster(BaseForecaster):
 
         # Resolve weights path
         if weights_path is None:    # search for the transition/emission matrix weights
-            weights_filename = self.parameters.get("weights_file", "transition_matrix.pkl")
+            weights_filename = self.parameters.get("weights_file", self.WEIGHTS_FILE)
             model_dir = os.path.dirname(config_path)
             weights_path = os.path.join(model_dir, weights_filename)
 
@@ -59,7 +97,9 @@ class HMMForecaster(BaseForecaster):
     def generate_zero_forecast(self, last_observed_minute: int) -> pd.DataFrame:
         """Generates a zero-filled forecast DataFrame when no workload is found."""
 
-        future_minutes = np.arange(last_observed_minute + 1, last_observed_minute + self.future_horizon + 1)
+        future_minutes = np.arange(
+            last_observed_minute + 1, last_observed_minute + self.future_horizon + 1
+        )
         return pd.DataFrame({
             "Time": future_minutes * self.bucket_seconds,
             "Predicted": 0.0

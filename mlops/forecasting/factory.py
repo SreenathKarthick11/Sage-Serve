@@ -14,7 +14,14 @@ from forecasting.base import BaseForecaster
 from forecasting.hmm_forecaster import HMMForecaster
 # from mlops.forecasting.nn_forecaster import NNForecaster
 
-REGISTERED_MODELS = ["nn", "hmm", "arima"]      # should be read from a config or found out, no hard code
+# To add a new model type: write the class, then add one line here.
+FORECASTER_CLASSES = {
+    "arima": ARIMAForecaster,
+    "hmm": HMMForecaster,
+    # "nn": NNForecaster,
+}
+REGISTERED_MODELS = list(FORECASTER_CLASSES)
+
 
 class ForecasterFactory:
     """
@@ -43,8 +50,8 @@ class ForecasterFactory:
 
         if not os.path.exists(pointer_path) and (not override_type or not override_version):
             raise FileNotFoundError(
-                f"Model registry pointer not found at: {pointer_path}. \
-                Ensure active_model.json exists or provide override arguments."
+                f"Model registry pointer not found at: {pointer_path}. "
+                "Ensure active_model.json exists or provide override arguments."
             )
 
         # Determine model_type and version
@@ -66,23 +73,13 @@ class ForecasterFactory:
         if not os.path.exists(model_dir):
             raise FileNotFoundError(f"Model directory does not exist: {model_dir}")
 
-        # Create instance and return based on model_type
-        if model_type == "arima":
-            return ARIMAForecaster(config_path=config_path)
-
-        elif model_type == "hmm":
-            weights_path = os.path.join(model_dir, "transition_matrix.pkl")
-            return HMMForecaster(config_path=config_path, weights_path=weights_path)
-
-        # elif model_type == "nn":
-        #     weights_path = os.path.join(model_dir, "model.pt")
-        #     return NNForecaster(config_path=config_path, weights_path=weights_path)
-
-        else:
+        cls = FORECASTER_CLASSES.get(model_type)
+        if cls is None:
             raise ValueError(
-                f"Unsupported model_type '{model_type}'. "
-                f"Expected one of {REGISTERED_MODELS}."
+                f"Unsupported model_type '{model_type}'. Expected one of {REGISTERED_MODELS}."
             )
+        weights_path = os.path.join(model_dir, cls.WEIGHTS_FILE) if cls.WEIGHTS_FILE else None
+        return cls(config_path=config_path, weights_path=weights_path)
 
     @staticmethod
     def run_forecast(clean_dir, source: str,

@@ -37,6 +37,9 @@ FORECAST_IMPLEMENTATION = "arima-wrapper-v1"
 class ARIMAForecaster(BaseForecaster):
     """ARIMA implementation of the common BaseForecaster interface."""
 
+    REQUIRED_PARAMS = ["order", "train_window_mins", "future_horizon", "bucket_seconds"]
+    WEIGHTS_FILE = None
+
     def __init__(
         self,
         config_path: str,

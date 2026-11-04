@@ -1,16 +1,19 @@
 """CLI for the model registry.
 
-Run from the project root (so the default registry path resolves):
+Run from the directory that has `model_registry` and `forecasting` importable
+(for example PYTHONPATH=mlops from the project root):
 
-    python -m mlops.model_registry.run register --name arima --path ./my_model_dir --metrics mae=9.2
-    python -m mlops.model_registry.run card --name arima --version v3 \
+    python -m model_registry.run register --name arima --config my_arima.yaml --metrics mae=9.2
+    python -m model_registry.run register --name hmm --config my_hmm.yaml --weights ./transition_matrix.pkl --metrics mae=11.0
+    python -m model_registry.run register --name hmm --config my_hmm.yaml --train-from data/clean/static/<clean id> --metrics mae=11.0
+    python -m model_registry.run card --name arima --version v2 \
         --description "ARIMA(1,1,1) workload forecaster" \
         --intended-use "Per-minute prompt-size forecasting" \
         --limitations "Poor on bursty traffic"
-    python -m mlops.model_registry.run promote --name arima --version v3 --stage Production
-    python -m mlops.model_registry.run active
-    python -m mlops.model_registry.run list
-    python -m mlops.model_registry.run production --name arima
+    python -m model_registry.run promote --name arima --version v2 --stage Production
+    python -m model_registry.run active
+    python -m model_registry.run list
+    python -m model_registry.run production --name arima
 """
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ def _parse_metrics(pairs: list[str]) -> dict[str, float]:
     metrics = {}
     for pair in pairs:
         if "=" not in pair:
-            raise argparse.ArgumentTypeError(f"metric must be key=value, got {pair!r}")
+            raise ValueError(f"metric must be key=value, got {pair!r}")
         k, v = pair.split("=", 1)
         metrics[k.strip()] = float(v)
     return metrics
@@ -40,7 +43,10 @@ def _print(obj) -> None:
 
 
 def cmd_register(a):
-    _print(scripts.register_model(a.name, a.path, _parse_metrics(a.metrics), a.registry))
+    _print(scripts.register_from_config(
+        a.name, a.config, _parse_metrics(a.metrics),
+        weights_path=a.weights, train_from=a.train_from, registry_dir=a.registry,
+    ))
 
 
 def cmd_card(a):
@@ -83,9 +89,12 @@ def cmd_list(a):
             mf = ver_dir / "manifest.json"
             stage = "?"
             if mf.exists():
-                stage = json.loads(mf.read_text()).get("stage", "None")
+                try:
+                    stage = json.loads(mf.read_text()).get("stage", "None")
+                except json.JSONDecodeError:
+                    stage = "INVALID-JSON"
             card = "card" if (ver_dir / "model_card.json").exists() else "no-card"
-            print(f"{name_dir.name}/{ver_dir.name:<5} stage={stage:<11} {card}")
+            print(f"{name_dir.name}/{ver_dir.name:<5} stage={stage:<12} {card}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,10 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--registry", default=DEFAULT_REGISTRY, help="registry directory")
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("register", help="register a new model version")
+    s = sub.add_parser("register", help="register a new model version from a config")
     s.add_argument("--name", required=True, help="model type, e.g. arima, hmm")
-    s.add_argument("--path", required=True, help="file or dir with config/weights")
-    s.add_argument("--metrics", nargs="*", default=[], help="key=value pairs, e.g. mae=9.2 f1=0.85")
+    s.add_argument("--config", required=True, help="path to the model's config yaml")
+    s.add_argument("--weights", help="pre-trained weights file (models that need one)")
+    s.add_argument("--train-from", help="clean trace dir to train weights from (e.g. HMM)")
+    s.add_argument("--metrics", nargs="*", default=[], help="key=value, e.g. mae=9.2")
     s.set_defaults(func=cmd_register)
 
     s = sub.add_parser("card", help="generate a model card")
@@ -127,7 +138,8 @@ def main() -> None:
     a = build_parser().parse_args()
     try:
         a.func(a)
-    except (scripts.GovernanceError, FileNotFoundError, ValueError) as exc:
+    except (scripts.GovernanceError, FileNotFoundError, ValueError, NotImplementedError) as exc:
+        # json.JSONDecodeError is a ValueError; scripts._load_json already names the file
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 

@@ -10,9 +10,13 @@ Implements Model Registry lifecycle operations:
 
 import json
 import os
+import pickle
 import shutil
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+import yaml
 
 # Enforced Governance Constants
 REQUIRED_CARD_FIELDS = ["model_description", "intended_use", "limitations"]
@@ -28,6 +32,15 @@ class GovernanceError(Exception):
 def _now() -> str:
     """Returns ISO-formatted UTC timestamp string."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _load_json(path: str) -> dict:
+    """Load a JSON file, naming the file if it is empty or invalid."""
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid or empty JSON file: {path}") from exc
 
 
 def _next_version_id(existing_dir: str) -> str:
@@ -61,12 +74,12 @@ def register_model(
     Copies weights/configs from 'model_path' into model_registry/models/<name>/<next_v>/
     and writes an initial manifest.json.
     """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"model_path does not exist: {model_path}")
+
     base_model_dir = os.path.join(registry_dir, "models", name)
     version_id = _next_version_id(base_model_dir)
     target_dir = _model_dir(registry_dir, name, version_id)
-
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"model_path does not exist: {model_path}")
 
     os.makedirs(target_dir, exist_ok=True)
 
@@ -108,6 +121,50 @@ def register_model(
     return manifest
 
 
+def register_from_config(
+    name: str,
+    config_path: str,
+    metrics: Dict[str, float],
+    weights_path: Optional[str] = None,
+    train_from: Optional[str] = None,
+    registry_dir: str = "mlops/model_registry",
+) -> Dict[str, Any]:
+    """Validate a config (+ weights or training data) against the model class,
+    then register it as the next version."""
+    from forecasting.factory import FORECASTER_CLASSES   # lazy: avoids import cycles
+
+    cls = FORECASTER_CLASSES.get(name)
+    if cls is None:
+        raise ValueError(f"Unknown model '{name}'. Known: {list(FORECASTER_CLASSES)}")
+    if not os.path.isfile(config_path):
+        raise FileNotFoundError(f"config not found: {config_path}")
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f) or {}
+    cls.validate_config(config, name)
+
+    version_id = _next_version_id(os.path.join(registry_dir, "models", name))
+    config["model_info"]["version"] = version_id
+
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, "config.yaml"), "w") as f:
+            yaml.safe_dump(config, f, sort_keys=False)
+
+        if cls.WEIGHTS_FILE:
+            dest = os.path.join(tmp, cls.WEIGHTS_FILE)
+            if weights_path:
+                if not os.path.isfile(weights_path) or os.path.getsize(weights_path) == 0:
+                    raise ValueError(f"weights file missing or empty: {weights_path}")
+                shutil.copy2(weights_path, dest)
+            elif train_from:
+                with open(dest, "wb") as f:
+                    pickle.dump(cls.train(config, train_from), f)
+            else:
+                raise ValueError(f"'{name}' needs --weights or --train-from.")
+
+        return register_model(name, tmp, metrics, registry_dir)
+
+
 def generate_model_card(
     name: str,
     version_id: str,
@@ -126,8 +183,7 @@ def generate_model_card(
     if not os.path.exists(manifest_path):
         raise FileNotFoundError(f"Model version manifest not found at: {manifest_path}")
 
-    with open(manifest_path, "r") as f:
-        manifest = json.load(f)
+    manifest = _load_json(manifest_path)
 
     # Validate card fields
     for field in REQUIRED_CARD_FIELDS:
@@ -180,8 +236,7 @@ def promote_model(
     if not os.path.exists(manifest_path):
         raise FileNotFoundError(f"Manifest missing for {name} version {version_id}")
 
-    with open(manifest_path, "r") as f:
-        manifest = json.load(f)
+    manifest = _load_json(manifest_path)
 
     # Governance Check Gate
     if target_stage == "Production":
@@ -218,8 +273,7 @@ def promote_model(
             for v_folder in os.listdir(base_models_dir):
                 other_manifest_path = os.path.join(base_models_dir, v_folder, "manifest.json")
                 if os.path.exists(other_manifest_path) and v_folder != version_id:
-                    with open(other_manifest_path, "r") as f:
-                        other_manifest = json.load(f)
+                    other_manifest = _load_json(other_manifest_path)
 
                     if other_manifest.get("stage") == "Production":
                         old_stage = other_manifest.get("stage")
@@ -271,8 +325,7 @@ def get_production_model(name: str, registry_dir: str = "mlops/model_registry") 
     for v_folder in os.listdir(base_models_dir):
         manifest_path = os.path.join(base_models_dir, v_folder, "manifest.json")
         if os.path.exists(manifest_path):
-            with open(manifest_path, "r") as f:
-                manifest = json.load(f)
+            manifest = _load_json(manifest_path)
             if manifest.get("stage") == "Production":
                 return manifest
 

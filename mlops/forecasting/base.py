@@ -59,3 +59,23 @@ class BaseForecaster(ABC):
         """Read the clean trace in clean_dir, forecast, write forecast CSVs,
         and return the published forecast directory."""
         pass
+
+    @classmethod
+    def validate_config(cls, config: dict, name: str) -> None:
+        """Check a user-supplied config against this model's requirements."""
+        info = config.get("model_info")
+        params = config.get("parameters")
+        if not isinstance(info, dict) or not isinstance(params, dict):
+            raise ValueError("config needs 'model_info' and 'parameters' mappings.")
+        if str(info.get("type", "")).lower() != name:
+            raise ValueError(
+                f"config model_info.type must be '{name}', got {info.get('type')!r}."
+            )
+        missing = [k for k in cls.REQUIRED_PARAMS if k not in params]
+        if missing:
+            raise ValueError(f"config parameters missing: {missing}")
+
+    @classmethod
+    def train(cls, config: dict, clean_dir):
+        """Return the weights artifact to pickle. Only needed if WEIGHTS_FILE is set."""
+        raise NotImplementedError(f"{cls.__name__} cannot be trained from a trace.")
