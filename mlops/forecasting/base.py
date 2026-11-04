@@ -13,8 +13,8 @@ import numpy as np
 class BaseForecaster(ABC):
     """
     Abstract Base Class for all forecasting models (ARIMA, HMM, NN etc.).
-    
-    Makes unified interface for loading configurations/weights and 
+
+    Makes unified interface for loading configurations/weights and
     executing predictions for downstream consumption by the SageServe LP solver.
     """
 
@@ -25,7 +25,7 @@ class BaseForecaster(ABC):
 
         Args:
             config_path (str): Path to the model's config.yaml file in the model_registry.
-            weights_path (str, optional): Path to model weights or pre-trained artifacts 
+            weights_path (str, optional): Path to model weights or pre-trained artifacts
                                          (e.g., .pt or .pkl), if applicable (for NN or HMM models).
         """
         pass
@@ -36,7 +36,7 @@ class BaseForecaster(ABC):
         Generates a forecast for the next time window based on the input data.
 
         Args:
-            input_data (Union[List[float], np.ndarray]): Time series data for the lookback window 
+            input_data (Union[List[float], np.ndarray]): Time series data for the lookback window
                                                          (e.g., last 60 minutes of QPS/TPS).
 
         Returns:
@@ -52,4 +52,10 @@ class BaseForecaster(ABC):
         Returns:
             Dict[str, Any]: Dictionary containing model information (type, version, parameters, etc.).
         """
+        pass
+
+    @abstractmethod
+    def run_forecast(self, clean_dir, source: str):
+        """Read the clean trace in clean_dir, forecast, write forecast CSVs,
+        and return the published forecast directory."""
         pass

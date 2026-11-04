@@ -1,5 +1,5 @@
 """
-mlops/scripts/model_registry.py
+mlops/model_registry/scripts.py
 
 Implements Model Registry lifecycle operations:
 1. Registration of a Model (Versioning & File Artifact Packaging)
@@ -138,7 +138,7 @@ def generate_model_card(
         if "TODO" in val:
             raise ValueError(f"Model card field '{field}' contains uncompleted 'TODO' placeholder.")
 
-    # Construct model card 
+    # Construct model card
     model_card = {
         "name": name,
         "version_id": version_id,

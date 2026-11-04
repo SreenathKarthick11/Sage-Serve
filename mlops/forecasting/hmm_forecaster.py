@@ -14,7 +14,12 @@ import pandas as pd
 import yaml
 
 from forecasting.base import BaseForecaster
-
+import shutil
+from pathlib import Path
+from forecasting.trace_io import load_clean_trace, safe_filename_part
+from pipeline.versioning import (
+    artifact_id, derive_id, finalize, new_tmp_dir, set_latest, version_dir, version_exists,
+)
 
 class HMMForecaster(BaseForecaster):
     """
@@ -31,8 +36,9 @@ class HMMForecaster(BaseForecaster):
         self.model_info = self.config.get("model_info", {})
         self.parameters = self.config.get("parameters", {})
 
-        self.future_horizon = self.parameters.get("future_horizon", 61)
-        self.bucket_seconds = self.parameters.get("bucket_seconds", 60)
+        self.train_window = int(self.parameters.get("train_window_mins", 60))
+        self.future_horizon = int(self.parameters.get("future_horizon", 60))
+        self.bucket_seconds = int(self.parameters.get("bucket_seconds", 60))
         self.config_path = config_path
 
         # Resolve weights path
@@ -53,7 +59,7 @@ class HMMForecaster(BaseForecaster):
     def generate_zero_forecast(self, last_observed_minute: int) -> pd.DataFrame:
         """Generates a zero-filled forecast DataFrame when no workload is found."""
 
-        future_minutes = np.arange(1, last_observed_minute + self.future_horizon + 1)
+        future_minutes = np.arange(last_observed_minute + 1, last_observed_minute + self.future_horizon + 1)
         return pd.DataFrame({
             "Time": future_minutes * self.bucket_seconds,
             "Predicted": 0.0
@@ -144,4 +150,69 @@ class HMMForecaster(BaseForecaster):
             "description": self.model_info.get("description", "Hidden Markov Model Forecaster"),
             "weights_path": self.weights_path,
             "parameters": self.parameters,
+            "train_window": self.train_window,
+            "future_horizon": self.future_horizon,
+            "bucket_seconds": self.bucket_seconds,
         }
+
+    def run_forecast(self, clean_dir, source: str) -> Path:
+        stage = "forecasts"
+        clean_dir = Path(clean_dir)
+        df = load_clean_trace(clean_dir)
+
+        models = sorted(df["model_type"].dropna().unique().tolist(), key=str)
+        regions = sorted(df["source_region"].dropna().unique().tolist())
+
+        df["minute"] = (df["arrival_timestamp"] // self.bucket_seconds).astype(int)
+        last_min = int(df["minute"].max())
+        input_minutes = pd.RangeIndex(
+            max(0, last_min - self.train_window + 1), last_min + 1, name="minute"
+        )
+
+        clean_id = artifact_id(source, "clean", clean_dir.name)
+        params = {
+            "forecaster_implementation": "hmm-wrapper-v1",
+            "forecaster_metadata": self.get_metadata(),
+            "train_window": self.train_window,
+            "future_horizon": self.future_horizon,
+            "bucket_seconds": self.bucket_seconds,
+            "workload_metric": "sum(prompt_size) per minute",
+            "models": [str(m) for m in models],
+            "source_regions": [int(r) for r in regions],
+        }
+        version = derive_id([clean_id], params)
+
+        if version_exists(source, stage, version):
+            print(f"Forecast version {version} already exists; reusing it.")
+            set_latest(source, stage, version)
+            return version_dir(source, stage, version)
+
+        tmp_dir = new_tmp_dir(source, stage)
+        try:
+            n_files = 0
+            for model_name in models:
+                for region_id in regions:
+                    subset = df[(df["model_type"] == model_name)
+                                & (df["source_region"] == region_id)]
+                    series = (subset.groupby("minute")["prompt_size"].sum()
+                              .reindex(input_minutes, fill_value=0.0).astype(float))
+
+                    forecast_df = self.predict(
+                        series, return_dataframe=True, last_observed_minute=last_min
+                    )
+                    filename = f"forecast_{safe_filename_part(model_name)}_region{region_id}.csv"
+                    forecast_df.to_csv(tmp_dir / filename, index=False)
+                    n_files += 1
+                    print(f"Saved {filename}: rows={len(forecast_df)}")
+
+            return finalize(
+                tmp_dir, source, stage, version,
+                parents=[clean_id], params=params,
+                details={"status": "complete", "n_forecast_files": n_files,
+                         "models": [str(m) for m in models],
+                         "source_regions": [int(r) for r in regions],
+                         "last_observed_minute": last_min},
+            )
+        except BaseException:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise

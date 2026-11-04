@@ -1,7 +1,7 @@
 """
 mlops/forecasting/factory.py
 
-Factory class responsible for dynamically reading the active model pointer 
+Factory class responsible for dynamically reading the active model pointer
 from the Model Registry and instantiating the corresponding forecaster.
 """
 
@@ -83,3 +83,14 @@ class ForecasterFactory:
                 f"Unsupported model_type '{model_type}'. "
                 f"Expected one of {REGISTERED_MODELS}."
             )
+
+    @staticmethod
+    def run_forecast(clean_dir, source: str,
+                     registry_dir: str = "mlops/model_registry",
+                     override_type: Optional[str] = None,
+                     override_version: Optional[str] = None):
+        """Load the active forecaster and let it run its own forecast stage."""
+        forecaster = ForecasterFactory.load_active_forecaster(
+            registry_dir, override_type, override_version
+        )
+        return forecaster.run_forecast(clean_dir, source)
