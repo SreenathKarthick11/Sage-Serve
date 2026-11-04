@@ -1,178 +1,324 @@
-# SageServe Inference Report — Column Reference
+# Understanding and running inference
 
-`inference_report.csv` is the output of `mlops/inference/run_inference.py`.
-Each **row** describes one **(model × simulation-config)** combination evaluated
-against the raw per-request data stored in `experiments/results`.
+This module analyzes **saved simulator measurements**. It does not load an LLM
+or send inference requests. Think of it as the analyst reading a restaurant's
+receipts and staffing records after an experiment.
 
-The file is designed to be **comparable across runs**: tag each run with
-`--forecast-model <name>` and the `forecast_model` column lets you line up
-the same model/config pair from two different simulations side-by-side.
+The main flow is:
 
----
+    detailed request CSVs + arbiter capacity CSVs + export inventory
+        -> loader.load_results()
+        -> metrics.build_report()
+        -> report CSV + per-window CSV + provenance JSON
+        -> diagnostic PNGs
 
-## Identity columns
+Summary files identify exported windows and applications; their percentiles
+are not averaged together. Latency percentiles come from pooled request rows.
+Memory files are streamed to check whether live applications were omitted from
+the detailed exports. They are not used to invent export timestamps.
 
-| Column | Type | Description |
-|---|---|---|
-| `forecast_model` | string | Tag you supply via `--forecast-model` (e.g. `arima`, `prophet`). Use this to compare two runs that used different forecasting models. |
-| `model` | string | The LLM/application model inside the simulation (`A`, `B`, `C`, `D`). |
-| `run` | int | Experiment run index (matches the top-level numeric directory under `experiments/results/`). |
-| `trace` | string | Workload trace name (e.g. `week-dp`). |
-| `lts` | bool | Whether the long-term scaler was active in this config. |
-| `sts` | bool | Whether the short-term scaler was active in this config. |
-| `arbiter` | string | Arbiter variant used (e.g. `basic_arbiter`). |
+## Run it
 
----
+From the repository root, using the MLOps environment:
 
-## Volume metrics
+~~~bash
+source mlops/mlops_venv/bin/activate
 
-| Column | Unit | Description |
-|---|---|---|
-| `n_requests` | count | Total requests observed across all simulation windows for this (model, config). |
-| `n_windows` | count | Number of simulation time-windows (1 window ≈ 1 hour of simulated time). |
-| `requests_per_window` | req / window | Mean request rate per window. Higher = richer training signal for a forecasting model. |
+python mlops/inference/run_inference.py \
+  --results experiments/results \
+  --forecast-model reactive-baseline \
+  --out mlops/inference/reports/static_demo.csv \
+  --plots-dir mlops/inference/reports/static_demo_plots
+~~~
 
----
+The output paths in this example all stay inside mlops:
 
-## Latency percentiles
+- static_demo.csv: one row per experiment and model.
+- static_demo_windows.csv: one row per experiment, model and exported window.
+- static_demo.metadata.json: complete saved configuration, input file hashes,
+  diagnostics, thresholds, scoring references, weights and known limitations.
+- static_demo_plots/: eight diagnostic charts.
 
-All values are in **seconds**.  Derived from per-request measurements in
-`experiments/results/.../detailed/<app>/<window>.csv`.
+--forecast-model supplies an **unverified label**. It does not select, run,
+or evaluate a forecasting model.
 
-| Column | Description |
+Bad schemas, malformed CSVs, nonnumeric/infinite/negative required measurements,
+and inconsistent timing values fail by default with a filename and reason.
+Header-only CSVs are valid empty exports. Genuine missing cells remain unknown.
+Use --allow-partial to explicitly skip invalid files or retain their usable
+cells; every issue is recorded. A skipped application export is not an empty
+application.
+
+Exit codes:
+
+| Code | Meaning |
 |---|---|
-| `e2e_p50` | Median end-to-end response time. |
-| `e2e_p95` | 95th-percentile end-to-end response time. |
-| `e2e_p99` | 99th-percentile end-to-end response time.  The primary tail-latency indicator. |
-| `ttft_p95` | 95th-percentile Time-to-First-Token. |
-| `ttft_p99` | 99th-percentile TTFT.  Critical for streaming UX. |
-| `tbt_p99` | 99th-percentile Time-Between-Tokens (inter-token gap). |
+| 0 | Requested report outputs were written. Unknown duration or unavailable FSS can still be present. |
+| 1 | Input/settings validation or report writing failed. |
+| 2 | A usable report was written, but inputs/request exports were incomplete or plot generation failed. |
 
----
+A detected upstream omission can therefore produce exit code 2 even without
+--allow-partial. The report remains useful as a description of the exported
+subset. --no-plots avoids importing Matplotlib.
 
-## SLO violation rates
+## Experiment identity and loading
 
-Fraction of requests (0.0 – 1.0) that breached the configured threshold.
+A normal experiment ends at:
 
-| Column | Threshold | Description |
-|---|---|---|
-| `viol_ttft` | TTFT > 10 s | Fraction of requests where the first token arrived after 10 seconds. |
-| `viol_tbt`  | TBT > 0.2 s | Fraction of requests where any inter-token gap exceeded 200 ms. |
+    <run>/<trace>/feed_async_<bool>/feed_async_granularity_<n>/
+    scaling_level_<n>/scaling_interval_<n>/lts_<bool>_sts<bool>/arbiter_<name>/
 
-> **Interpretation**: `viol_ttft = 0.03` means 3 % of requests violated the
-> TTFT SLO.  Zero is ideal.  Values above ~5 % indicate the configuration is
-> oversubscribed under this forecasting model's scaling decisions.
+The parent folder need not be literally named results. You can also point the
+loader at a single arbiter directory. A numeric run and the LTS/STS component
+must still be present in its ancestry.
 
----
+experiment_id hashes the experiment's full relative path and saved Hydra
+configuration. All configuration levels distinguish experiments. source_path
+and relative_path identify the original input, and config_sha256 identifies
+the saved .hydra/config.yaml. Full configuration is retained in JSON, including
+settings not named in the CSV. IDs should be compared using the same loading
+root; changing the scope of that root can change relative identities.
 
-## Variability metrics
+The CSV also retains run, trace, lts, sts, arbiter, feed_async,
+feed_async_granularity, scaling_level and scaling_interval. Flags are stored
+as their path strings. Model names may contain underscores. Region names with
+underscores are resolved using the saved controller configuration; without
+that configuration, the first underscore separates region from model.
 
-| Column | Description |
+Repeated runs into the same simulator output directory can overwrite or mix
+exports. No analysis module can recover overwritten measurements. Keep each
+experiment's source directory distinct.
+
+## Latency, benchmark and volume columns
+
+| Column | Meaning |
 |---|---|
-| `cv_response` | Coefficient of variation (std / mean) of end-to-end response times. **Lower = more stable, easier to forecast.** A CV > 1 indicates highly bursty or bimodal latency. |
-| `demand_cv` | CV of prompt-token sizes per request. **Lower = more regular demand patterns**, which benefit simple models like ARIMA. |
-| `demand_mean` | Mean prompt-token count per request. |
+| n_requests | Observed request rows, including rows with some unknown measurements in partial input. Not the number of arrivals. |
+| n_valid_response_times, n_valid_ttft_times, etc. | Valid sample count for each required measurement. |
+| e2e_p50/p95/p99 | Pooled end-to-end response-time percentiles, in seconds. |
+| queue_p50/p95/p99 | Pooled queue-time percentiles, in seconds. |
+| ttft_p50/p95/p99 | Pooled time-to-first-token percentiles, in seconds. |
+| avg_tbt_p50/p95/p99 | Percentiles of each request's average token interval. |
+| queue_fraction_mean | Mean of queue_time / response_time for valid, positive-response rows. |
+| cv_response | Sample standard deviation / mean of response time. |
+| prompt_size_mean, prompt_size_cv | Mean and sample CV of per-request prompt sizes. |
+| output_tokens_mean | Mean generated-token count per request. |
+| latency_sample_status | no_samples, single_sample, small_sample (<100), or ok. This is a sample-size notice, not statistical certification. |
+| viol_ttft, viol_avg_tbt | Fraction of valid measurements above fixed benchmark thresholds. |
+| benchmark_joint_pass_fraction | Fraction passing both thresholds among rows with both measurements. |
+| n_valid_benchmark_pairs | Denominator for joint compliance. |
+| n_windows | Exported window inventory, including valid empty exports. Missing window numbers are diagnosed. |
+| requests_per_window | Observed request rows / exported windows; a completion-volume proxy, not an arrival rate. |
+| n_quiet_windows | Windows known to have zero completions in complete exports. |
+| n_observed_empty_windows | Windows with zero observed rows, which might still have omitted applications. |
+| completion_window_cv | CV of complete exported-window completion counts, including zeros. |
+| request_data_complete | Whether discovered/expected application exports and required cells are complete. Not a guarantee that the simulator exported every completion. |
+| input_error_count | Invalid inputs accepted in partial mode; affected experiments remain ineligible for FSS. |
+| n_unexported_live_applications | Distinct live application groups seen in memory logs but absent from relevant detailed exports. |
+| export_duration_seconds | Sum of explicitly supplied export durations; otherwise blank. |
+| completed_requests_per_second | Completions / explicit duration, only when request coverage and duration are known. |
 
----
+A percentile computed from a small sample is descriptive, with limited evidence
+about the tail. CV uses sample standard deviation (ddof=1) and stays unknown
+with fewer than two valid samples or a zero mean. Zero variability is not
+substituted for insufficient evidence.
 
-## Cost metrics
+The simulator's TBT is:
 
-Derived from VM scaling decisions in `experiments/results/.../arbiters/<region>/<window>.csv`.
+    (response_time - time_to_first_token) / token_size
 
-| Column | Unit | Description |
-|---|---|---|
-| `prod_vm_h` | VM-hours | Total production (on-demand) VM-hours consumed across all windows. |
-| `spot_vm_h` | VM-hours | Total spot/preemptible VM-hours consumed. |
-| `mem_util_mean` | [0, 1] | Mean memory utilisation across all scaling decisions. |
-| `vm_h_per_window` | VM-hours / window | Total VM-hours divided by number of windows. The primary **cost-efficiency indicator**. Lower = cheaper per unit time under this forecasting model. |
+It is a request-level average proxy, **not the largest inter-token gap**.
+The benchmark defaults are TTFT >10 seconds and average TBT >0.2 seconds.
+Use --ttft-threshold and --tbt-threshold to change them. These are not original
+per-request SLAs, which cannot be joined back without request IDs.
 
----
+Violation fractions use valid measurements only. If some values are missing,
+their valid counts and incomplete status remain visible; unknown values are
+never counted as successful requests. Request-size CV does not describe
+weekday/weekend arrival patterns or establish forecastability.
 
-## FSS Sub-scores  *(each in [0, 1])*
+Compatibility aliases remain: tbt_p99 = avg_tbt_p99, viol_tbt = viol_avg_tbt,
+demand_cv = prompt_size_cv, demand_mean = prompt_size_mean.
 
-These are the five raw components of the FSS before weighting.
-They are useful for diagnosing **why** a config scored high or low.
+## Resource accounting and explicit boundaries
 
-| Column | Weight | What it captures |
-|---|---|---|
-| `score_slo` | 35 % | `1 − mean(viol_ttft, viol_tbt)`.  Perfect SLO compliance → 1.0. |
-| `score_stability` | 25 % | `1 / (1 + cv_response)`.  Stable latency → close to 1.0.  Highly variable → close to 0. |
-| `score_demand` | 20 % | `1 / (1 + demand_cv)`.  Regular demand → close to 1.0.  Bursty demand → close to 0. |
-| `score_cost` | 10 % | Inverted min-max rank of `vm_h_per_window` within this report.  The cheapest config gets 1.0. |
-| `score_throughput` | 10 % | Min-max rank of `requests_per_window`.  More requests = richer historical signal = 1.0. |
+For every model and region, capacity snapshots are sorted across the complete
+experiment, regardless of CSV partitioning. A recorded capacity state is held
+until the next snapshot. For example, two instances at t=0, t=1800 and t=3600
+establish **two instance-hours** during the observed hour.
 
-> **Note**: `score_cost` and `score_throughput` are **relative** to the
-> configs in the same report.  Absolute cost comparisons across runs require
-> manual normalisation.
+With no explicit boundaries, integration stops at the final snapshot. It
+never invents a median-gap tail or extrapolates a lone snapshot. Counts sharing
+a timestamp use the last recorded state. Missing/corrupt intervening exports
+prevent integrating across that gap.
 
----
-
-## Forecast Suitability Score (FSS)
-
-```
-fss = (0.35 × norm(score_slo)
-     + 0.25 × norm(score_stability)
-     + 0.20 × norm(score_demand)
-     + 0.10 × score_cost
-     + 0.10 × score_throughput) × 100
-```
-
-| Column | Range | Description |
-|---|---|---|
-| `fss` | 0 – 100 | **The single discrete indicator.** Higher means the traffic pattern produced by the simulation is more forecastable, SLO-compliant, and cost-efficient under the current forecasting model's decisions. |
-
-### Interpreting FSS
-
-| FSS | What it signals |
+| Column | Meaning |
 |---|---|
-| ≥ 80 | Traffic is stable, SLOs are met, demand is regular.  The forecasting model is doing well for this (model, config). |
-| 50 – 79 | Moderate variability or partial SLO pressure.  The forecasting model works but may benefit from seasonal/trend awareness. |
-| 30 – 49 | Bursty demand or notable SLO violations.  The forecasting model's scaling decisions are not fully covering load. |
-| < 30 | Highly unstable or extremely sparse traffic.  The forecasting model is struggling with this configuration. |
+| prod_vm_h, spot_vm_h | Observed production/spot instance-hours. May cover only part of the experiment; inspect status. Blank if no interval can be established. |
+| resource_coverage_status | complete, partial, observed_intervals_only, insufficient_snapshots, or missing. |
+| resource_observed_region_seconds | Sum of covered seconds across expected regions. |
+| resource_time_coverage | Covered region-seconds / explicitly known total region-seconds; otherwise blank. |
+| resource_snapshots | Number of loaded capacity snapshots. |
+| memory_util_snapshot_mean | Event-weighted mean of the upstream memory_util field; not a verified, time-weighted per-model measurement. |
+| vm_h_per_window | Instance-hours / exported windows, only with complete resource duration. |
+| vm_h_per_1000_completions | Resource proxy per 1,000 exported completions, only with complete request and resource coverage. |
 
-> These are **guidelines**, not hard gates.  The real value of FSS is in
-> **relative comparison**: if ARIMA yields FSS = 65 and Prophet yields
-> FSS = 78 for the same (model D, lts=False) row, Prophet is the better
-> choice for that traffic pattern.
+prod_vm_h/spot_vm_h retain their historical names. They are counts of simulated
+instances multiplied by duration, not GPU-hours, measured cloud bills, or a
+guarantee that different instance types have the same cost.
+mem_util_mean remains an alias of memory_util_snapshot_mean.
 
----
+For precise boundaries, supply --window-boundaries path/to/boundaries.csv:
 
-## Plots generated
+~~~csv
+experiment_id,window,start_seconds,end_seconds
+<experiment_id from the report>,0,0,3600
+<experiment_id from the report>,1,3600,7216.202420967854
+~~~
 
-All plots are saved to `mlops/inference/plots/` by default.
+These numbers illustrate the schema; use independently known export times.
+Do not infer boundaries from window_number * 3600, formatted log messages,
+or configured end_time. The simulator can save on the next event after an
+hour and can stop without flushing its last partial window. The CSV can omit
+experiment_id only when loading one experiment. Bounds must be finite,
+nonnegative, ordered, nonoverlapping, and refer to actual exported windows.
+Partial boundary inventories leave duration unknown.
 
-| File | What to look for |
+Known end boundaries permit holding the last recorded state to the end of an
+export. An unknown initial state still leaves partial coverage. Even complete
+coverage is conditional on the recorded-state model and upstream logging
+correctness; input histories cannot prove that every transition was logged.
+
+## What relative FSS means now
+
+Raw metrics are the primary results. FSS is a legacy name for an optional
+**relative composite**, not a forecasting accuracy metric or an absolute
+quality grade. Schema/scoring version 2 is not comparable to old reports.
+
+Peers share model, trace and window inventory (including supplied boundaries).
+Models A and B are not peers simply because both appear in one report.
+At least two eligible experiments are required. Incomplete request measurements,
+insufficient samples, or unknown enabled components make a row ineligible.
+Cost requires complete resource duration. Status explains every missing score.
+
+The components are:
+
+| Component | Raw input | Default relative weight |
+|---|---|---|
+| slo | 1 - mean(TTFT violation fraction, average-TBT violation fraction) | .35 |
+| stability | 1 / (1 + response-time CV) | .25 |
+| demand | 1 / (1 + per-request prompt-size CV) | .20 |
+| cost | Inverted rank of instance-hours per exported window | .10 |
+| throughput | Rank of completions per exported window | .10 |
+
+All components are min-max normalized among eligible peers in the same cohort.
+Ties among multiple peers receive 0.5. Missing values remain missing.
+Finite nonnegative weights are normalized to sum to one; an all-zero set is
+rejected. A component can be disabled with weight zero. For example,
+--cost-weight 0 explicitly removes resource cost and renormalizes other weights;
+it does not repair incomplete request exports.
+
+contribution_slo, contribution_stability, contribution_demand, contribution_cost
+and contribution_throughput are weighted points whose sum equals fss.
+weight_* records the actual normalized weights. score_slo/score_stability/
+score_demand are raw diagnostic components; score_cost/score_throughput are
+cohort-relative ranks.
+
+fss_cohort_id fingerprints the eligible member IDs, component measurements,
+thresholds, weights and normalization reference. The complete reference is
+saved in metadata.fss_cohorts. Adding a peer or changing evidence can change
+relative scores and the cohort ID. Compare FSS only within the **same cohort**.
+Do not concatenate independently scored reports and interpret score differences
+as evidence that ARIMA is better than Prophet. Use raw metrics for separate
+reports, or load aligned experiments together and score them in one cohort.
+Matching a trace label still assumes the input workload artifacts are comparable.
+
+## Plots
+
+All plots use numeric positions and experiment identifiers, so configurations
+cannot overlap just because their model/LTS names match. Unknown values are
+omitted or explicitly labelled; they are never replaced by apparent zeros.
+
+| File | Purpose |
 |---|---|
-| `fss_bar.png` | Primary at-a-glance chart.  Long green bars = well-served by the current forecasting model. |
-| `sub_scores.png` | Stacked bar breaking FSS into its five components.  Useful to see *why* a config scores high or low. |
-| `latency_pct.png` | Grouped bar of e2e p50 / p95 / p99.  Watch for a large p95→p99 gap (tail inflation). |
-| `slo_violations.png` | Dot-plot of TTFT and TBT violation rates.  Any dot far from zero warrants investigation. |
-| `cv_scatter.png` | Forecastability space.  Points near the origin (low CV on both axes) are easiest to forecast, coloured by FSS. |
+| fss_bar.png | Relative scores or explicit reasons that scores are unavailable. |
+| sub_scores.png | Actual weighted FSS contributions, summing to the final score. |
+| latency_pct.png | Pooled p50/p95/p99 end-to-end latency. |
+| slo_violations.png | Fixed benchmark violation fractions; average TBT is labelled precisely. |
+| cv_scatter.png | Response-time variability versus prompt-size variability; no forecastability claim. |
+| resource_usage.png | Production/spot instance-hours with resource-coverage status. |
+| data_coverage.png | Valid measurements / observed rows, with incomplete-export warnings. |
+| completions_by_window.png | Completion counts including quiet windows; red crosses indicate observed subsets. |
 
----
+## Optional forecast error evaluation
 
-## Comparing two forecasting models
+This is a separate analysis because completed-request measurements are not the
+arrival-demand series a forecaster predicts. Supply the actual input trace and
+forecast directory explicitly:
 
-Run the inference script twice with different `--forecast-model` tags and
-different `--out` files, then concatenate:
+~~~bash
+python mlops/inference/forecast_evaluation.py \
+  --trace data/static/clean/<version>/validated_trace.csv \
+  --forecasts data/static/forecasts/<version> \
+  --evaluation-start 3600 \
+  --observation-end 4980 \
+  --out mlops/inference/reports/forecast_accuracy.csv
+~~~
 
-```python
-import pandas as pd
+Use an observation end supported by your trace collection interval. The bounds
+must be exact minute boundaries; 4980 above is an example. The evaluation
+interval is [start, end). Default start excludes the ARIMA implementation's
+first-hour warm-up. Future forecasts outside that interval are not scored.
 
-arima   = pd.read_csv("mlops/inference/inference_arima.csv")
-prophet = pd.read_csv("mlops/inference/inference_prophet.csv")
+The target matches forecasting/arima_forecaster.py: sum prompt_size in
+60-second buckets, per model and **first-priority source region**, using all
+trace rows. Quiet minutes receive zero observed demand; absent predictions
+remain unknown. This is not demand at the eventual serving region. Configured
+evaluation bounds assert which complete minutes were observed.
 
-combined = pd.concat([arima, prophet], ignore_index=True)
+Outputs include MAE, RMSE, bias, WAPE, prediction coverage and skill relative
+to a one-minute persistence baseline on the same available buckets.
+WAPE is unknown when total observed demand is zero; skill is unknown when
+baseline error is zero. A companion _buckets.csv contains aligned values and
+.metadata.json records artifact hashes and evaluation definitions.
 
-# Compare FSS for the same (model, trace, lts, sts, arbiter):
-pivot = combined.pivot_table(
-    index=["model", "trace", "lts", "sts", "arbiter"],
-    columns="forecast_model",
-    values="fss",
-)
-print(pivot)
-```
+These forecast files have no forecast-origin timestamps. This evaluator
+cannot prove absence of future-data leakage, or prove a simulation consumed
+the supplied artifacts. Those facts remain explicitly unverified. Full
+per-request SLA evaluation and worst-token-gap evaluation also require
+upstream fields that are not currently exported.
 
-The row with the **higher FSS** is the forecasting model better suited to
-that traffic pattern.  When a model registry is available, this pivot can be
-computed automatically over all registered models.
+## Known upstream limits
+
+Changes here do not modify SageServe-original:
+
+1. Applications created during scaling can be omitted from detailed exports.
+   The memory identifier audit detects omissions visible in memory snapshots;
+   a missing snapshot cannot prove that an application never existed.
+2. The simulator does not flush final partial windows. Requests beyond the last
+   export cannot be reconstructed; n_requests is not total completed workload.
+3. Arbiter memory utilization can be assigned to the wrong model. It is retained
+   as a snapshot diagnostic and excluded from scoring.
+
+Missing memory files limit omission detection. request_data_complete certifies
+the available/discovered export inventory, not the upstream exporter.
+
+## Tests and Python API
+
+~~~bash
+PYTHONPATH=mlops python -B -m unittest discover -s mlops/inference/tests -v
+~~~
+
+Tests use small temporary fixtures and do not rerun the simulator.
+
+~~~python
+from inference.metrics import build_report, compute_metrics
+
+report = build_report("experiments/results")
+report.metrics       # main table
+report.windows       # full exported-window inventory and observed subsets
+report.metadata      # diagnostics, provenance, normalization and limitations
+
+df = compute_metrics("experiments/results")  # compatibility API; emits warnings
+df.attrs["metadata"]
+~~~
