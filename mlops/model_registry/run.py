@@ -25,7 +25,7 @@ from pathlib import Path
 
 from . import scripts
 
-DEFAULT_REGISTRY = str(Path(__file__).resolve().parent)   # works from any cwd
+from .location import REGISTRY_DIR as DEFAULT_REGISTRY 
 
 
 def _parse_metrics(pairs: list[str]) -> dict[str, float]:

@@ -23,7 +23,8 @@ ALL_STAGES = ["ingest", "etl", "forecast"]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-model_registry = os.path.join(PROJECT_ROOT, "mlops", "model_registry")
+from model_registry.location import REGISTRY_DIR
+model_registry = REGISTRY_DIR
 
 
 def run(source: str, stages: list[str], input_version: str = "latest", ingest_args: dict | None = None):

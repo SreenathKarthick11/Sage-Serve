@@ -12,6 +12,7 @@ from typing import Optional
 from forecasting.arima_forecaster import ARIMAForecaster
 from forecasting.base import BaseForecaster
 from forecasting.hmm_forecaster import HMMForecaster
+from model_registry.location import REGISTRY_DIR
 # from mlops.forecasting.nn_forecaster import NNForecaster
 
 # To add a new model type: write the class, then add one line here.
@@ -31,7 +32,7 @@ class ForecasterFactory:
 
     @staticmethod
     def load_active_forecaster(
-        registry_dir: str = "mlops/model_registry",
+        registry_dir: str = "REGISTRY_DIR",
         override_type: Optional[str] = None,
         override_version: Optional[str] = None,
     ) -> BaseForecaster:
@@ -83,7 +84,7 @@ class ForecasterFactory:
 
     @staticmethod
     def run_forecast(clean_dir, source: str,
-                     registry_dir: str = "mlops/model_registry",
+                     registry_dir: str = "REGISTRY_DIR",
                      override_type: Optional[str] = None,
                      override_version: Optional[str] = None):
         """Load the active forecaster and let it run its own forecast stage."""

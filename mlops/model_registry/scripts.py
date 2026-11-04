@@ -15,8 +15,9 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-
 import yaml
+
+from .location import REGISTRY_DIR
 
 # Enforced Governance Constants
 REQUIRED_CARD_FIELDS = ["model_description", "intended_use", "limitations"]
@@ -66,7 +67,7 @@ def register_model(
     name: str,
     model_path: str,    # this is where the model's weights actually locally live
     metrics: Dict[str, float],
-    registry_dir: str = "mlops/model_registry"  # assuming this will be running from PROJECT ROOT
+    registry_dir: str = REGISTRY_DIR  # assuming this will be running from PROJECT ROOT
 ) -> Dict[str, Any]:
     """
     Register a new version of model 'name' in the registry.
@@ -127,7 +128,7 @@ def register_from_config(
     metrics: Dict[str, float],
     weights_path: Optional[str] = None,
     train_from: Optional[str] = None,
-    registry_dir: str = "mlops/model_registry",
+    registry_dir: str = REGISTRY_DIR,
 ) -> Dict[str, Any]:
     """Validate a config (+ weights or training data) against the model class,
     then register it as the next version."""
@@ -169,7 +170,7 @@ def generate_model_card(
     name: str,
     version_id: str,
     card_fields: Dict[str, str],
-    registry_dir: str = "mlops/model_registry"
+    registry_dir: str = REGISTRY_DIR
 ) -> Dict[str, Any]:
     """
     Validate and write a model card for an already-registered model version.
@@ -217,7 +218,7 @@ def promote_model(
     name: str,
     version_id: str,
     target_stage: str,
-    registry_dir: str = "mlops/model_registry"
+    registry_dir: str = REGISTRY_DIR
 ) -> Dict[str, Any]:
     """
     Move model 'name' version 'version_id' to 'target_stage' ("Staging" or "Production").
@@ -313,7 +314,7 @@ def promote_model(
     return manifest
 
 
-def get_production_model(name: str, registry_dir: str = "mlops/model_registry") -> Optional[Dict[str, Any]]:
+def get_production_model(name: str, registry_dir: str = REGISTRY_DIR) -> Optional[Dict[str, Any]]:
     """
     Scan model directory 'name' and return the manifest dictionary of the
     version whose stage == "Production". Return None if no version is in Production.
