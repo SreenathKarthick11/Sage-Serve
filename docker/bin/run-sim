@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# usage: run-sim [static|streaming]   (default: streaming)
+set -euo pipefail
+
+SOURCE="${1:-streaming}"
+RAW="$(latest "$SOURCE" raw)"
+FC="$(latest "$SOURCE" forecasts)"
+
+echo "Trace:     $RAW/trace.csv"
+echo "Forecasts: $FC"
+
+test -f "$RAW/trace.csv"
+test -d "$FC"
+
+cd "$SIM_DIR"
+exec /opt/venvs/sim/bin/python run.py \
+  trace.path="$RAW/trace.csv" \
+  global_arbiter.arima_traces="$FC" \
+  short_term_scaling=True \
+  long_term_scaling=True

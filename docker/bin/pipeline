@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+cd "$MLOPS_DIR" && exec /opt/venvs/mlops/bin/python -m pipeline.run_pipeline "$@"
