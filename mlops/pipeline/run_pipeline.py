@@ -11,6 +11,12 @@ content/parameter derived), and every new artifact is appended to data/lineage/l
 """
 from __future__ import annotations
 
+from pathlib import Path
+import os
+import re
+import numpy as np
+import pandas as pd
+
 import argparse
 
 from . import lineage
@@ -18,6 +24,11 @@ from .paths import SOURCES
 from .versioning import artifact_id, resolve_version
 
 ALL_STAGES = ["ingest", "etl", "forecast"]
+#ALL_STAGES = ["ingest", "etl"]
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+model_registry = os.path.join(PROJECT_ROOT, "mlops", "model_registry")
 
 
 def run(source: str, stages: list[str], input_version: str = "latest", ingest_args: dict | None = None):
@@ -43,9 +54,16 @@ def run(source: str, stages: list[str], input_version: str = "latest", ingest_ar
 
     if "forecast" in stages:
         print(f"\n=== [3/3] forecast ({source}) ===")
+
+        from forecasting.factory import ForecasterFactory
         from forecasting.arima_forecaster import run_forecast
+
         clean_dir = clean_dir or resolve_version(source, "clean", input_version)
-        forecast_dir = run_forecast(clean_dir, source)
+
+        forecaster = ForecasterFactory().load_active_forecaster(model_registry)
+
+        forecast_dir = run_forecast(clean_dir, source, forecaster)
+
 
     last = forecast_dir or clean_dir or raw_dir
     if last is not None:

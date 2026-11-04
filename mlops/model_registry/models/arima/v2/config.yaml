@@ -1,0 +1,14 @@
+model_info:
+  type: arima
+  version: v2
+  description: "Walk-forward ARIMA forecaster with periodic refitting"
+
+parameters:
+  order:
+    p: 1
+    d: 2
+    q: 1
+  train_window_mins: 60
+  future_horizon: 61
+  bucket_seconds: 60
+  regions: [1, 2, 0]

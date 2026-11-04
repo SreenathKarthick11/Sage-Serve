@@ -1,0 +1,12 @@
+model_info:
+  type: hmm
+  version: v1
+  description: "Hidden Markov Model forecaster for workload state transitions"
+
+parameters:
+  n_states: 3
+  train_window_mins: 60
+  future_horizon: 61
+  bucket_seconds: 60
+  weights_file: "transition_matrix.pkl"
+  regions: [0, 1, 2]
