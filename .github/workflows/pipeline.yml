@@ -14,95 +14,95 @@ on:
       - 'SageServe-original/**'
 
 jobs:
-  # unit-tests:
-  #   name: Unit Tests
-  #   runs-on: ubuntu-latest
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Check out repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.12'
-  #         cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
-  #     - name: Set up Environment & Run Unit Tests
-  #       run: |
-  #         cd mlops
+      - name: Set up Environment & Run Unit Tests
+        run: |
+          cd mlops
 
-  #         # Create and activate virtual environment
-  #         python -m venv .venv
-  #         source .venv/bin/activate
+          # Create and activate virtual environment
+          python -m venv .venv
+          source .venv/bin/activate
 
-  #         # Install dependencies
-  #         pip install --upgrade pip
-  #         if [ -f requirements.txt ]; then
-  #           pip install -r requirements.txt
-  #         fi
+          # Install dependencies
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
-  #         # Run all module unit tests
-  #         python -m unittest tests.test_inference -v
-  #         python -m unittest tests.test_etl -v
-  #         python -m unittest tests.test_forecasting -v
-  #         python -m unittest tests.test_model_registry -v
-  #         python -m unittest tests.test_pipeline -v
+          # Run all module unit tests
+          python -m unittest tests.test_inference -v
+          python -m unittest tests.test_etl -v
+          python -m unittest tests.test_forecasting -v
+          python -m unittest tests.test_model_registry -v
+          python -m unittest tests.test_pipeline -v
 
-  # integration-tests:
-  #   name: Integration Tests
-  #   needs: unit-tests
-  #   runs-on: ubuntu-latest
+  integration-tests:
+    name: Integration Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Check out repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.12'
-  #         cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
-  #     - name: Set up Environment & Run Pipeline Integration
-  #       run: |
-  #         cd mlops
+      - name: Set up Environment & Run Pipeline Integration
+        run: |
+          cd mlops
 
-  #         # Create and activate virtual environment
-  #         python -m venv .venv
-  #         source .venv/bin/activate
+          # Create and activate virtual environment
+          python -m venv .venv
+          source .venv/bin/activate
 
-  #         # Install dependencies
-  #         pip install --upgrade pip
-  #         if [ -f requirements.txt ]; then
-  #           pip install -r requirements.txt
-  #         fi
+          # Install dependencies
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
-  #         # Setup a test ARIMA model in registry so forecast integration stage can execute
-  #         cat << 'EOF' > test_arima_config.yaml
-  #         model_info:
-  #           type: arima
-  #           description: "CI Integration Test ARIMA"
-  #         parameters:
-  #           order: {p: 1, d: 1, q: 1}
-  #           train_window_mins: 60
-  #           future_horizon: 60
-  #           bucket_seconds: 60
-  #         EOF
+          # Setup a test ARIMA model in registry so forecast integration stage can execute
+          cat << 'EOF' > test_arima_config.yaml
+          model_info:
+            type: arima
+            description: "CI Integration Test ARIMA"
+          parameters:
+            order: {p: 1, d: 1, q: 1}
+            train_window_mins: 60
+            future_horizon: 60
+            bucket_seconds: 60
+          EOF
 
-  #         python -m model_registry.run register --name arima --config test_arima_config.yaml --metrics mae=10.0
-  #         python -m model_registry.run card --name arima --version v1 --description "CI Card" --intended-use "Testing" --limitations "None"
-  #         python -m model_registry.run promote --name arima --version v1 --stage Production
+          python -m model_registry.run register --name arima --config test_arima_config.yaml --metrics mae=10.0
+          python -m model_registry.run card --name arima --version v1 --description "CI Card" --intended-use "Testing" --limitations "None"
+          python -m model_registry.run promote --name arima --version v1 --stage Production
 
-  #         # Run full MLOps pipeline integration (ingest -> etl -> forecast) using streaming (duration=60)
-  #         python -m pipeline.run_pipeline --source streaming --duration 60 --speedup 60
+          # Run full MLOps pipeline integration (ingest -> etl -> forecast) using streaming (duration=60)
+          python -m pipeline.run_pipeline --source streaming --duration 60 --speedup 60
 
-  #         # Verify lineage recording works end-to-end
-  #         python -m pipeline.lineage list --source streaming
+          # Verify lineage recording works end-to-end
+          python -m pipeline.lineage list --source streaming
 
   sageserve-simulator-inference:
     name: SageServe Simulator & Inference (Streaming 60s)
-    # needs: integration-tests
+    needs: integration-tests
     runs-on: ubuntu-latest
 
     steps:
