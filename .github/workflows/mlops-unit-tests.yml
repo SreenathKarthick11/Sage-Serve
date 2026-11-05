@@ -45,3 +45,4 @@ jobs:
           python -m unittest tests.test_etl -v
           python -m unittest tests.test_forecasting -v
           python -m unittest tests.test_model_registry -v
+          python -m unittest tests.test_pipeline -v
