@@ -1,6 +1,8 @@
-"""Regression tests for the failure cases documented in the inference review.
+"""
+    Tests for the Inference module
 
-Run: PYTHONPATH=mlops python -B -m unittest discover -s mlops/inference/tests -v
+    To run test :
+        python -m unittest tests.test_inference -v
 """
 from contextlib import redirect_stderr, redirect_stdout
 import io

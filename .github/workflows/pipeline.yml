@@ -1,0 +1,184 @@
+name: MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, sreenath/ci-cd ]
+    paths:
+      - 'mlops/**'
+      - 'SageServe-original/**'
+      - '.github/workflows/pipeline.yml'
+  pull_request:
+    branches: [ main, sreenath/ci-cd ]
+    paths:
+      - 'mlops/**'
+      - 'SageServe-original/**'
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Set up Environment & Run Unit Tests
+        run: |
+          cd mlops
+
+          # Create and activate virtual environment
+          python -m venv .venv
+          source .venv/bin/activate
+
+          # Install dependencies
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+          # Run all module unit tests
+          python -m unittest tests.test_inference -v
+          python -m unittest tests.test_etl -v
+          python -m unittest tests.test_forecasting -v
+          python -m unittest tests.test_model_registry -v
+          python -m unittest tests.test_pipeline -v
+
+  integration-tests:
+    name: Integration Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Set up Environment & Run Pipeline Integration
+        run: |
+          cd mlops
+
+          # Create and activate virtual environment
+          python -m venv .venv
+          source .venv/bin/activate
+
+          # Install dependencies
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+          # Setup a test ARIMA model in registry so forecast integration stage can execute
+          cat << 'EOF' > test_arima_config.yaml
+          model_info:
+            type: arima
+            description: "CI Integration Test ARIMA"
+          parameters:
+            order: {p: 1, d: 1, q: 1}
+            train_window_mins: 60
+            future_horizon: 60
+            bucket_seconds: 60
+          EOF
+
+          python -m model_registry.run register --name arima --config test_arima_config.yaml --metrics mae=10.0
+          python -m model_registry.run card --name arima --version v1 --description "CI Card" --intended-use "Testing" --limitations "None"
+          python -m model_registry.run promote --name arima --version v1 --stage Production
+
+          # Run full MLOps pipeline integration (ingest -> etl -> forecast) using streaming (duration=60)
+          python -m pipeline.run_pipeline --source streaming --duration 60 --speedup 60
+
+          # Verify lineage recording works end-to-end
+          python -m pipeline.lineage list --source streaming
+
+  sageserve-simulator-inference:
+    name: SageServe Simulator & Inference (Streaming 60s)
+    needs: integration-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Run Streaming Pipeline, Simulator, and Inference
+        run: |
+          REPO="$GITHUB_WORKSPACE"
+
+          # 1. Run MLOps Streaming Pipeline (Ingest -> ETL -> Forecast)
+          cd "$REPO/mlops"
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install hydra-core
+
+          # Register & Promote a valid model for forecasting
+          cat << 'EOF' > ci_arima.yaml
+          model_info:
+            type: arima
+            description: "Simulator CI ARIMA"
+          parameters:
+            order: {p: 1, d: 1, q: 1}
+            train_window_mins: 60
+            future_horizon: 60
+            bucket_seconds: 60
+          EOF
+
+          python -m model_registry.run register --name arima --config ci_arima.yaml --metrics mae=9.5
+          python -m model_registry.run card --name arima --version v1 --description "Card" --intended-use "Testing" --limitations "None"
+          python -m model_registry.run promote --name arima --version v1 --stage Production
+
+          # Execute streaming pipeline for 60 seconds duration
+          python -m pipeline.run_pipeline --source streaming --duration 60 --speedup 60
+
+          # Dynamically resolve paths
+          STREAMING_RAW_DIR=$(python -c "from pipeline.versioning import resolve_version; print(resolve_version('streaming', 'raw', 'latest'))")
+          STREAMING_FORECAST_DIR=$(python -c "from pipeline.versioning import resolve_version; print(resolve_version('streaming', 'forecasts', 'latest'))")
+          STREAMING_TRACE="$STREAMING_RAW_DIR/trace.csv"
+
+          deactivate
+
+          # 2. Run SageServe Simulator with Streaming Trace and Forecasts (using Python 3.11)
+          cd "$REPO/SageServe-original"
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install hydra-core  # Required for run.py execution[cite: 1]
+
+          python run.py \
+            trace.path="$STREAMING_TRACE" \
+            global_arbiter.arima_traces="$STREAMING_FORECAST_DIR" \
+            short_term_scaling=True \
+            long_term_scaling=True
+
+          deactivate
+
+          # 3. Run Inference Analysis Module
+          cd "$REPO"
+          source mlops/.venv/bin/activate
+
+          python3 mlops/inference/run_inference.py \
+            --results experiments/results \
+            --forecast-model arima \
+            --out mlops/inference/reports/streaming_ci.csv \
+            --no-plots
