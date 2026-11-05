@@ -112,7 +112,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'   # SageServe-original strictly requires Python 3.11
+          python-version: '3.12'  
           cache: 'pip'
 
       - name: Run Streaming Pipeline, Simulator, and Inference
