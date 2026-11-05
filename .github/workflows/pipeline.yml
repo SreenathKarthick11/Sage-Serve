@@ -6,7 +6,7 @@ on:
     paths:
       - 'mlops/**'
       - 'SageServe-original/**'
-      - '.github/workflows/mlops-unit-tests.yml'
+      - '.github/workflows/pipeline.yml'
   pull_request:
     branches: [ main, sreenath/ci-cd ]
     paths:
