@@ -112,7 +112,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'   # SageServe-original strictly requires Python 3.11
           cache: 'pip'
 
       - name: Run Streaming Pipeline, Simulator, and Inference
@@ -123,7 +123,11 @@ jobs:
           cd "$REPO/mlops"
           python -m venv .venv
           source .venv/bin/activate
-          pip install -r requirements.txt
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install hydra-core
 
           # Register & Promote a valid model for forecasting
           cat << 'EOF' > ci_arima.yaml
@@ -151,11 +155,15 @@ jobs:
 
           deactivate
 
-          # 2. Run SageServe Simulator with Streaming Trace and Forecasts
+          # 2. Run SageServe Simulator with Streaming Trace and Forecasts (using Python 3.11)
           cd "$REPO/SageServe-original"
           python -m venv .venv
           source .venv/bin/activate
-          pip install -r requirements.txt
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install hydra-core  # Required for run.py execution[cite: 1]
 
           python run.py \
             trace.path="$STREAMING_TRACE" \
