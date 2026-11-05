@@ -30,7 +30,7 @@ jobs:
 
       - name: Set up Environment & Run Unit Tests
         run: |
-          cd ml
+          cd mlops
 
           # Create and activate virtual environment
           python -m venv .venv
