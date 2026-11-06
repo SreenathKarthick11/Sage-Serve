@@ -11,8 +11,6 @@ from ui import apply_theme, render_sidebar  # noqa: E402
 
 apply_theme()
 page = render_sidebar()
-if page != "Overview":
-    show_last_run()
 
 {
     "Overview": overview.render,
@@ -21,3 +19,5 @@ if page != "Overview":
     "Simulator": views.render_simulator,
     "Results": views.render_results,
 }[page]()
+
+show_last_run()

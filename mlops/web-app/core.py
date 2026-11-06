@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 import subprocess
 import time
-
+import shutil
+import threading
+import html
+import signal
 import streamlit as st
 
 # ── settings (keep this folder where your original script lived) ────────────
@@ -97,48 +100,134 @@ def registry_models() -> list[dict]:
     return models
 
 
-# ── subprocess runner ───────────────────────────────────────────────────────
+# ── subprocess runner (background thread, survives page changes) ────────────
+@st.cache_resource
+def _jobs() -> dict:
+    return {"current": None}
+
+
+def last_job() -> dict | None:
+    return _jobs()["current"]
+
+
+def _worker(job: dict) -> None:
+    # No Streamlit calls in here: this runs outside the script thread.
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    try:
+        proc = subprocess.Popen(job["command"], cwd=job["cwd"], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, bufsize=1, env=env,
+                                start_new_session=True)  # own process group, so Stop can kill children too
+        job["proc"] = proc
+        if job.get("stopped"):  # Stop was clicked before the process existed
+            _kill(proc)
+        for line in proc.stdout:
+            job["lines"].append(line)
+        job["returncode"] = proc.wait()
+    except OSError as exc:
+        job["lines"].append(f"Could not start command: {exc}\n")
+        job["returncode"] = 127
+    finally:
+        job["elapsed"] = time.monotonic() - job["started"]
+        if job.get("cleanup_dir"):
+            shutil.rmtree(job["cleanup_dir"], ignore_errors=True)
+        job["running"] = False
+
+
+def _kill(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
+def stop_job() -> None:
+    job = last_job()
+    if job and job["running"]:
+        job["stopped"] = True
+        job["lines"].append("\n[stopped by user]\n")
+        if job.get("proc"):
+            _kill(job["proc"])
+
+
 def run_command(command: list[str], cwd: Path, label: str, extra: dict | None = None) -> None:
-    started = time.monotonic()
-    with st.spinner(f"Running {label.lower()}…"):
-        try:
-            result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
-            record = {
-                "label": label, "command": command, "cwd": str(cwd),
-                "returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
-                "elapsed": time.monotonic() - started, **(extra or {}),
-            }
-        except OSError as exc:
-            record = {
-                "label": label, "command": command, "cwd": str(cwd), "returncode": 127,
-                "stdout": "", "stderr": f"Could not start command: {exc}",
-                "elapsed": time.monotonic() - started, **(extra or {}),
-            }
-    st.session_state["last_run"] = record
+    current = last_job()
+    if current and current["running"]:
+        st.warning(f"“{current['label']}” is still running. Wait for it to finish or stop it.")
+        if extra and extra.get("cleanup_dir"):
+            shutil.rmtree(extra["cleanup_dir"], ignore_errors=True)
+        return
+    job = {"label": label, "command": command, "cwd": str(cwd), "returncode": None,
+           "lines": [], "running": True, "stopped": False, "proc": None,
+           "started": time.monotonic(), "elapsed": 0.0, **(extra or {})}
+    _jobs()["current"] = job
+    threading.Thread(target=_worker, args=(job,), daemon=True).start()
     st.rerun()
+
+_PILL_CSS = """
+<style>
+.sg-note{position:fixed;top:.7rem;right:4.5rem;z-index:1000002;display:flex;align-items:center;gap:.55rem;
+  color:#FBFADA;padding:.4rem .9rem;border-radius:999px;font-size:.85rem;
+  box-shadow:0 2px 10px rgba(0,0,0,.25);}
+.sg-note.run{background:#12372A;}
+.sg-note.ok{background:#2e7d4f;}
+.sg-note.warn{background:#b7791f;}
+.sg-note.bad{background:#b3261e;}
+.sg-note.fade{animation:sg-fade 8s forwards;}
+@keyframes sg-fade{0%,80%{opacity:1;}100%{opacity:0;visibility:hidden;}}
+.sg-spin{width:14px;height:14px;border:2px solid #ADBC9F;border-top-color:transparent;border-radius:50%;
+  animation:sg-rot .8s linear infinite;}
+@keyframes sg-rot{to{transform:rotate(360deg);}}
+</style>
+"""
+
+
+def _notify(kind: str, text: str, spinner: bool = False, fade: bool = False) -> None:
+    spin = '<span class="sg-spin"></span>' if spinner else ""
+    st.markdown(f'{_PILL_CSS}<div class="sg-note {kind}{" fade" if fade else ""}">{spin}{html.escape(text)}</div>',
+                unsafe_allow_html=True)
+
+
+def _terminal() -> None:
+    job = last_job()
+    if job is None:
+        return
+    if job["running"]:
+        st.session_state["term_was_running"] = True
+        _notify("run", f"{job['label']} is running…", spinner=True)
+        c1, c2 = st.columns([5, 1])
+        c1.caption(f"⏳ {job['label']} running… {time.monotonic() - job['started']:.0f}s")
+        c2.button("⏹ Stop", on_click=stop_job, use_container_width=True, key="stop-job")
+    else:
+        if st.session_state.pop("term_was_running", False):
+            st.rerun()  # full rerun so the page picks up the finished state
+        rc = job["returncode"]
+        fresh = not job.get("seen")  # show the header notification once per finished job
+        job["seen"] = True
+        if job.get("stopped"):
+            st.warning(f"{job['label']} was stopped.")
+            if fresh:
+                _notify("warn", f"{job['label']} stopped", fade=True)
+        elif rc == 0:
+            st.success(f"{job['label']} finished in {job['elapsed']:.1f}s.")
+            if fresh:
+                _notify("ok", f"✓ {job['label']} completed · exit code 0", fade=True)
+        elif rc == 2 and job["label"] == "Inference report":
+            st.warning("Inference report saved with partial data or plot diagnostics (exit code 2).")
+            if fresh:
+                _notify("warn", f"{job['label']} completed with warnings · exit code 2", fade=True)
+        else:
+            st.error(f"{job['label']} failed (exit code {rc}).")
+            if fresh:
+                _notify("bad", f"✕ {job['label']} failed · exit code {rc}", fade=True)
+    st.code("$ " + " ".join(job["command"]) + "\n" + "".join(job["lines"][-500:]), language="text")
+    if job.get("output_dir"):
+        st.caption(f"Simulator output: `{job['output_dir']}`")
 
 
 def show_last_run() -> None:
-    result = st.session_state.get("last_run")
-    if not result:
+    job = last_job()
+    if job is None:
         return
-    if result["returncode"] == 0:
-        st.success(f"{result['label']} finished in {result['elapsed']:.1f}s.")
-    elif result["returncode"] == 2 and result["label"] == "Inference report":
-        st.warning("Inference report saved with partial data or plot diagnostics (exit code 2).")
-    else:
-        st.error(f"{result['label']} failed (exit code {result['returncode']}). Open the run output for details.")
-    with st.expander("Run output", expanded=result["returncode"] not in (0, 2)):
-        st.code(" ".join(result["command"]), language="bash")
-        st.caption(f"Working directory: `{result['cwd']}`")
-        if result["stdout"]:
-            st.markdown("**Output**")
-            try:
-                st.json(json.loads(result["stdout"]))
-            except json.JSONDecodeError:
-                st.code(result["stdout"], language="text")
-        if result["stderr"]:
-            st.markdown("**Errors and diagnostics**")
-            st.code(result["stderr"], language="text")
-    if result.get("output_dir"):
-        st.caption(f"Simulator output: `{result['output_dir']}`")
+    st.divider()
+    st.subheader("Terminal")
+    st.fragment(run_every=1 if job["running"] else None)(_terminal)()

@@ -11,7 +11,7 @@ import streamlit as st
 import yaml
 
 from core import (MLOPS_DIR, MLOPS_PYTHON, REGISTRY_DIR, REPO_ROOT, REPORT_DIR, RESULTS_ROOT,
-                  SIM_DIR, SIM_PYTHON, artifact_versions, lineage_records, read_json,
+                  SIM_DIR, SIM_PYTHON, artifact_versions, last_job, lineage_records, read_json,
                   registry_models, run_command, version_labels)
 from ui import flow, go, page_header, pill
 
@@ -194,7 +194,7 @@ def _register() -> None:
         "future_horizon": int(c2.number_input("Forecast horizon (minutes)", min_value=1, value=60)),
         "bucket_seconds": int(c3.number_input("Bucket size (seconds)", min_value=1, value=60)),
     }
-    weights_path, train_from = "", ""
+    uploaded, train_from = None, ""
     if model_type == "arima":
         p, d, q = st.columns(3)
         parameters["order"] = {
@@ -207,40 +207,39 @@ def _register() -> None:
         parameters["n_states"] = int(st.number_input("HMM states", min_value=2, value=3))
         clean_sources = {f"{s} / {v}": path for s in ("static", "streaming")
                          for v, path, _ in artifact_versions(s, "clean")}
-        mode = st.radio("HMM weights", ["Train from a clean trace", "Use an existing weights file"], horizontal=True)
+        mode = st.radio("HMM weights", ["Train from a clean trace", "Upload an existing weights file"], horizontal=True)
         if mode == "Train from a clean trace":
             if clean_sources:
                 train_from = str(clean_sources[st.selectbox("Training trace", list(clean_sources))])
             else:
                 st.warning("Run ETL to create a clean trace before training an HMM.")
         else:
-            weights_path = st.text_input("Weights file", placeholder="/path/to/transition_matrix.pkl")
+            uploaded = st.file_uploader("Weights file (.pkl)", type=["pkl"])
 
     model_config = {"model_info": {"type": model_type, "description": description}, "parameters": parameters}
     with st.expander("Config file preview"):
         st.code(yaml.safe_dump(model_config, sort_keys=False), language="yaml")
     metrics_input = st.text_input("Measured governance metrics", placeholder="mae=12.4 or f1=0.84",
                                   help="Enter real measured metrics only. Production requires MAE <= 15 or F1 >= 0.80.")
-    can_register = model_type != "hmm" or bool(train_from or weights_path.strip())
+    can_register = model_type != "hmm" or bool(train_from or uploaded)
     label = ("Train and register HMM" if model_type == "hmm" and train_from
              else "Register HMM with weights" if model_type == "hmm" else "Register ARIMA")
     if st.button(label, type="primary", disabled=not can_register):
         metrics = [i.strip() for i in metrics_input.replace(",", " ").split() if i.strip()]
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", encoding="utf-8", delete=False) as f:
-            yaml.safe_dump(model_config, f, sort_keys=False)
-            config_path = Path(f.name)
+        tmp = Path(tempfile.mkdtemp(prefix="register_"))
+        config_path = tmp / "config.yaml"
+        config_path.write_text(yaml.safe_dump(model_config, sort_keys=False), encoding="utf-8")
         command = [str(MLOPS_PYTHON), "-m", "model_registry.run", "register", "--name", model_type, "--config", str(config_path)]
         if metrics:
             command.extend(["--metrics", *metrics])
         if train_from:
             command.extend(["--train-from", train_from])
-        elif weights_path.strip():
-            command.extend(["--weights", str(Path(weights_path).expanduser().resolve())])
-        try:
-            run_command(command, MLOPS_DIR, f"Register {model_type.upper()} model")
-        finally:
-            config_path.unlink(missing_ok=True)
-
+        elif uploaded:
+            weights_file = tmp / Path(uploaded.name).name
+            weights_file.write_bytes(uploaded.getvalue())
+            command.extend(["--weights", str(weights_file)])
+        run_command(command, MLOPS_DIR, f"Register {model_type.upper()} model",
+                    extra={"cleanup_dir": str(tmp)})
 
 def _versions() -> None:
     models = registry_models()
@@ -360,7 +359,7 @@ def _sim_form(src, raws, fcs) -> None:
 
 
 def _sim_results() -> None:
-    last = st.session_state.get("last_run", {})
+    last = last_job() or {}
     out = last.get("output_dir")
     if not (out and last.get("returncode") == 0 and Path(out).is_dir()):
         return
