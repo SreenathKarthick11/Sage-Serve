@@ -18,15 +18,21 @@ RUN uv venv --python 3.12 /opt/venvs/mlops \
  && uv pip install --python /opt/venvs/mlops/bin/python -r /tmp/mlops-req.txt
 
 # Environment 2: SageServe simulator (Python 3.11)
-RUN uv venv --python 3.11 /opt/venvs/sim \
+RUN uv venv --python 3.12 /opt/venvs/sim \
  && uv pip install --python /opt/venvs/sim/bin/python -r /tmp/sim-req.txt
 
-# Path variables used by the helper commands (and by the pipeline / registry)
+# Environment 3: Streamlit web UI
+RUN uv venv --python 3.12 /opt/venvs/app \
+ && uv pip install --python /opt/venvs/app/bin/python streamlit pandas pyyaml
+
+# Path variables used by the helper commands and venv
 ENV REPO=/workspace \
     MLOPS_DIR=/workspace/mlops \
     SIM_DIR=/workspace/SageServe-original \
     MLOPS_DATA_ROOT=/workspace/data \
     MODEL_REGISTRY_DIR=/workspace/data/model_registry \
+    MLOPS_PYTHON=/opt/venvs/mlops/bin/python \
+    SIM_PYTHON=/opt/venvs/sim/bin/python \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/workspace/docker/bin:/opt/venvs/mlops/bin:${PATH}"
 
@@ -35,4 +41,5 @@ ENV REPO=/workspace \
 RUN echo '[ -f /workspace/docker/sageserve.sh ] && . /workspace/docker/sageserve.sh' >> /etc/bash.bashrc
 
 WORKDIR /workspace
+EXPOSE 8501
 CMD ["bash"]

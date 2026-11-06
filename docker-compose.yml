@@ -7,3 +7,15 @@ services:
       - .:/workspace
     stdin_open: true
     tty: true
+
+  webui:
+    build: .
+    image: sageserve-dev
+    working_dir: /workspace/mlops/web-app/ 
+    volumes:
+      - .:/workspace
+    ports:
+      - "8501:8501"
+    command: ["/opt/venvs/app/bin/streamlit", "run", "app.py",
+              "--server.port=8501", "--server.address=0.0.0.0"]
+    restart: unless-stopped

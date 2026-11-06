@@ -20,8 +20,8 @@ DATA_ROOT = Path(os.environ.get("MLOPS_DATA_ROOT", REPO_ROOT / "data")).expandus
 REGISTRY_DIR = Path(
     os.environ.get("MODEL_REGISTRY_DIR", REPO_ROOT / "data" / "model_registry")
 ).expanduser().resolve()
-MLOPS_PYTHON = MLOPS_DIR / ".venv" / "bin" / "python"
-SIM_PYTHON = SIM_DIR / ".venv" / "bin" / "python"
+MLOPS_PYTHON = Path(os.environ.get("MLOPS_PYTHON", MLOPS_DIR / ".venv" / "bin" / "python"))
+SIM_PYTHON = Path(os.environ.get("SIM_PYTHON", SIM_DIR / ".venv" / "bin" / "python"))
 RESULTS_ROOT = REPO_ROOT / "experiments" / "results"
 REPORT_DIR = MLOPS_DIR / "inference" / "reports"
 
