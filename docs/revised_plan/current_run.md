@@ -719,23 +719,25 @@ streaming run. That is the legacy/static trace path. The streaming run
 must use `data/streaming/raw/<version>/trace.csv` and
 `data/streaming/forecasts/<version>/`.
 
-------------------------------------------------------------------------
+---
 
 ## 7. Run the inference module
 
 The inference entry point is:
 
-``` text
+```text
 mlops/inference/run_inference.py
+
 ```
+It analyzes saved simulator measurements (detailed request CSVs, arbiter capacity CSVs, export inventory) without running LLMs or sending live inference requests.
 
-Run it from the **repository root** using the MLOps virtual environment.
-Run it after the simulator workflow when performing the complete
-end-to-end verification.
+### 7a. Basic execution
 
-``` bash
+Run `run_inference.py` from the **repository root** using the MLOps virtual environment (`mlops/.venv`):
+
+```bash
 # Leave the SageServe simulator environment
-deactivate
+deactivate 2>/dev/null || true
 
 # Return to the repository root
 cd ~/repos/Sage-Serve
@@ -743,23 +745,42 @@ cd ~/repos/Sage-Serve
 # Activate the MLOps environment
 source mlops/.venv/bin/activate
 
-# Run inference
-python3 mlops/inference/run_inference.py
+# Run inference analysis
+python mlops/inference/run_inference.py \
+  --results experiments/results \
+  --forecast-model reactive-baseline \
+  --out mlops/inference/reports/static_demo.csv \
+  --plots-dir mlops/inference/reports/static_demo_plots
+
 ```
 
-The command above is the inference invocation used in this workflow.
-Keep the working directory at the repository root when invoking it, so
-any repository-relative paths used by the module resolve as expected.
+> **Note on `--forecast-model`:** This flag supplies an unverified descriptive label for report metadata; it does not select, execute, or evaluate a forecasting model.
 
-The exact inference inputs, model/configuration selection, and output
-locations are defined by the implementation of
-`mlops/inference/run_inference.py`; check that module if you need to
-change those settings. Do not assume that the inference module
-automatically selects a particular raw, clean, forecast, or simulator
-artifact, or the active registry model, unless its implementation
-explicitly does so.
+### 7b. Generated outputs
 
-------------------------------------------------------------------------
+Running the inference script produces the following outputs under the specified report paths:
+
+* **Main CSV report (`<out>.csv`)**: Summary metrics with one row per experiment and model.
+* **Per-window CSV (`<out_prefix>_windows.csv`)**: Metrics broken down with one row per experiment, model, and exported window.
+* **Metadata JSON (`<out_prefix>.metadata.json`)**: Complete configuration, input file hashes, diagnostics, thresholds, scoring references, weights, and known limitations.
+* **Diagnostic plots (`<plots_dir>/`)**: Up to 8 diagnostic charts (`fss_bar.png`, `sub_scores.png`, `latency_pct.png`, `slo_violations.png`, `cv_scatter.png`, `resource_usage.png`, `data_coverage.png`, `completions_by_window.png`). Use `--no-plots` to skip chart generation.
+
+### 7c. Exit codes
+
+| Exit Code | Meaning |
+| --- | --- |
+| **0** | Requested report outputs were successfully written. |
+| **1** | Input/settings validation or report writing failed. |
+| **2** | A usable report was written, but inputs/request exports were incomplete or plot generation failed. |
+
+### 7d. Common flags & options
+
+* `--allow-partial`: Explicitly skip invalid files or retain usable cells while recording any input/schema issues.
+* `--window-boundaries <path/to/boundaries.csv>`: Pass explicit window boundary timestamps (`experiment_id,window,start_seconds,end_seconds`) for precise resource duration accounting.
+* `--ttft-threshold <sec>` / `--tbt-threshold <sec>`: Custom TTFT (default >10.0s) and average TBT (default >0.2s) SLA violation benchmarks.
+* `--no-plots`: Disable Matplotlib diagnostic plot generation.
+
+---
 
 ## 8. Output locations
 
@@ -801,7 +822,7 @@ explicitly does so.
   Inference outputs                   Defined by `mlops/inference/run_inference.py`
   ------------------------------------------------------------------------------------------
 
-------------------------------------------------------------------------
+-------
 
 ## 9. Vary parameters to create new versions
 
