@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-st.set_page_config(page_title="SageServe MLOps", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="MLOps for SageServe", layout="wide")
 
 import overview, views  # noqa: E402
 from core import show_last_run  # noqa: E402
