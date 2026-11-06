@@ -139,6 +139,11 @@ def _kill(proc: subprocess.Popen) -> None:
     except (ProcessLookupError, PermissionError, OSError):
         pass
 
+def clear_job() -> None:
+    """Clear the terminal. Ignored while a job is still running."""
+    store = _jobs()
+    if store["current"] and not store["current"]["running"]:
+        store["current"] = None
 
 def stop_job() -> None:
     job = last_job()
@@ -195,7 +200,7 @@ def _terminal() -> None:
         st.session_state["term_was_running"] = True
         _notify("run", f"{job['label']} is running…", spinner=True)
         c1, c2 = st.columns([5, 1])
-        c1.caption(f"⏳ {job['label']} running… {time.monotonic() - job['started']:.0f}s")
+        c1.caption(f"{job['label']} running… {time.monotonic() - job['started']:.0f}s")
         c2.button("⏹ Stop", on_click=stop_job, use_container_width=True, key="stop-job")
     else:
         if st.session_state.pop("term_was_running", False):
@@ -222,6 +227,10 @@ def _terminal() -> None:
     st.code("$ " + " ".join(job["command"]) + "\n" + "".join(job["lines"][-500:]), language="text")
     if job.get("output_dir"):
         st.caption(f"Simulator output: `{job['output_dir']}`")
+    if not job["running"]:
+        if st.button("🗑 Clear terminal", key="clear-job"):
+            clear_job()
+            st.rerun()  # full rerun so the Terminal heading disappears too
 
 
 def show_last_run() -> None:

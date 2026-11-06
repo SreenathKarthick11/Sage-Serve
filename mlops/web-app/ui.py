@@ -6,7 +6,7 @@ import html
 import streamlit as st
 
 from core import (DATA_ROOT, MLOPS_PYTHON, REGISTRY_DIR, SIM_PYTHON, artifact_versions,
-                  read_json, registry_models)
+                  read_json, registry_models,clear_job)
 
 NAV = ["Overview", "Data & traces", "Forecast models", "Simulator", "Results"]
 
@@ -126,8 +126,7 @@ def render_sidebar() -> str:
             if active else pill("none", "warn"))
         row("Models", pill(len(registry_models())))
         st.caption(f"Data: `{DATA_ROOT}`")
-        if st.button("Refresh", use_container_width=True):
-            st.rerun()
+        st.button("Refresh", use_container_width=True, on_click=clear_job)
     return page
 
 
