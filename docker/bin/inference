@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+cd "$REPO" && exec /opt/venvs/mlops/bin/python mlops/inference/run_inference.py

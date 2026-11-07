@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# usage: latest <static|streaming> <raw|clean|forecasts>
+if [ "$#" -ne 2 ]; then
+  echo "usage: latest <static|streaming> <raw|clean|forecasts>" >&2
+  exit 2
+fi
+cd "$MLOPS_DIR" && exec /opt/venvs/mlops/bin/python -c \
+  "from pipeline.versioning import resolve_version; print(resolve_version('$1', '$2', 'latest'))"

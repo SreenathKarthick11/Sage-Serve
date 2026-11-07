@@ -112,7 +112,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: |
+            3.12
+            3.11
           cache: 'pip'
 
       - name: Run Streaming Pipeline, Simulator, and Inference
@@ -121,7 +123,7 @@ jobs:
 
           # 1. Run MLOps Streaming Pipeline (Ingest -> ETL -> Forecast)
           cd "$REPO/mlops"
-          python -m venv .venv
+          python3.12 -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           if [ -f requirements.txt ]; then
@@ -157,7 +159,7 @@ jobs:
 
           # 2. Run SageServe Simulator with Streaming Trace and Forecasts (using Python 3.11)
           cd "$REPO/SageServe-original"
-          python -m venv .venv
+          python3.11 -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           if [ -f requirements.txt ]; then
