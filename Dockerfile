@@ -18,7 +18,7 @@ RUN uv venv --python 3.12 /opt/venvs/mlops \
  && uv pip install --python /opt/venvs/mlops/bin/python -r /tmp/mlops-req.txt
 
 # Environment 2: SageServe simulator (Python 3.11)
-RUN uv venv --python 3.12 /opt/venvs/sim \
+RUN uv venv --python 3.11 /opt/venvs/sim \
  && uv pip install --python /opt/venvs/sim/bin/python -r /tmp/sim-req.txt
 
 # Environment 3: Streamlit web UI
