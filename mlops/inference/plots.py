@@ -160,28 +160,6 @@ def plot_resource_usage(df, out_dir):
     return _save(fig, out_dir, "resource_usage.png")
 
 
-def plot_data_coverage(df, out_dir):
-    fig, ax, y = _horizontal(df)
-    denominator = df.n_requests.replace(0, np.nan)
-    for offset, column, label, color in [
-        (-.22, "n_valid_response_times", "Response", _COLORS[0]),
-        (0, "n_valid_ttft_times", "TTFT", _COLORS[1]),
-        (.22, "n_valid_tbt_times", "Average TBT", _COLORS[2]),
-    ]:
-        values = (df[column]/denominator*100).to_numpy()
-        valid = np.isfinite(values)
-        ax.barh(y[valid]+offset, values[valid], height=.2, label=label, color=color)
-    _unknown(ax, y, denominator.to_numpy(), "no request samples")
-    for position, complete in zip(y, df.request_data_complete):
-        if not complete:
-            ax.text(101, position, "incomplete export", va="center", fontsize=8, color="#a33")
-    ax.set_xlim(0, 125)
-    ax.set_xlabel("Valid measurements / observed request rows (%)")
-    ax.set_title("Measurement coverage (missing rows cannot be reconstructed)")
-    ax.legend(fontsize=8)
-    return _save(fig, out_dir, "data_coverage.png")
-
-
 def plot_completions(windows, out_dir):
     groups = list(windows.groupby(["experiment_id", "model"], sort=True))
     fig, axes = plt.subplots(max(1, len(groups)), 1, figsize=(11, max(3, 2.4*len(groups))), squeeze=False)
@@ -206,7 +184,7 @@ def generate_all(df, out_dir, *, windows=None):
     if df.empty:
         raise ValueError("Cannot plot an empty inference report")
     functions = [plot_fss_bar, plot_sub_scores, plot_latency_pct, plot_slo_violations,
-                 plot_cv_scatter, plot_resource_usage, plot_data_coverage]
+                 plot_cv_scatter, plot_resource_usage]
     paths = [function(df, out_dir) for function in functions]
     if windows is not None and not windows.empty:
         paths.append(plot_completions(windows, out_dir))

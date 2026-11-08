@@ -403,6 +403,36 @@ def render_results() -> None:
     _reports()
 
 
+def _coverage_data(data: pd.DataFrame) -> pd.DataFrame:
+    """Coverage for the selected report; unknown and zero-sample rates stay blank."""
+    columns = {
+        "experiment_id": "Experiment",
+        "model": "Model",
+        "n_requests": "Observed requests",
+        "n_valid_response_times": "Valid response times",
+        "response_coverage": "Response coverage (%)",
+        "n_valid_ttft_times": "Valid TTFT measurements",
+        "ttft_coverage": "TTFT coverage (%)",
+        "n_valid_tbt_times": "Valid average-TBT measurements",
+        "tbt_coverage": "Average-TBT coverage (%)",
+        "n_windows": "Exported windows",
+        "n_unexported_live_applications": "Missing application exports",
+        "request_data_complete": "Request exports complete",
+        "resource_coverage_status": "Resource coverage",
+        "export_duration_seconds": "Known export duration (s)",
+    }
+    coverage = data.reindex(columns=list(columns)).copy()
+    observed = pd.to_numeric(coverage["n_requests"], errors="coerce")
+    denominator = observed.where(observed > 0)
+    for source, target in (
+        ("n_valid_response_times", "response_coverage"),
+        ("n_valid_ttft_times", "ttft_coverage"),
+        ("n_valid_tbt_times", "tbt_coverage"),
+    ):
+        coverage[target] = pd.to_numeric(coverage[source], errors="coerce") / denominator * 100
+    return coverage.rename(columns=columns)
+
+
 def _reports() -> None:
     reports = (sorted((p for p in REPORT_DIR.glob("*.csv") if not p.stem.endswith("_windows")),
                       key=lambda p: p.stat().st_mtime, reverse=True) if REPORT_DIR.is_dir() else [])
@@ -437,7 +467,18 @@ def _reports() -> None:
             chart[metric] = pd.to_numeric(chart[metric], errors="coerce")
             st.bar_chart(chart.set_index(label_col), height=260, color=MOSS)
         plots_dir = REPORT_DIR / f"{report.stem}_plots"
-        plots = sorted(plots_dir.glob("*.png")) if plots_dir.is_dir() else []
+        # Old report folders can still contain the retired coverage chart.
+        plots = (sorted(p for p in plots_dir.glob("*.png") if p.name != "data_coverage.png")
+                 if plots_dir.is_dir() else [])
+        st.subheader("Data coverage")
+        st.dataframe(
+            _coverage_data(data), width="stretch", hide_index=True,
+            column_config={name: st.column_config.NumberColumn(format="%.1f") for name in (
+                "Response coverage (%)", "TTFT coverage (%)", "Average-TBT coverage (%)")},
+        )
+        st.caption("Coverage percentages use observed request rows, not all input arrivals. "
+                   "Blank values are unavailable, including percentages with no request samples. "
+                   "Complete request exports do not establish coverage of the entire simulation.")
         if plots:
             st.subheader(f"Diagnostic plots ({len(plots)})")
             for i in range(0, len(plots), 2):

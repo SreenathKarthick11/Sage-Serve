@@ -37,7 +37,7 @@ The output paths in this example all stay inside mlops:
 - static_demo_windows.csv: one row per experiment, model and exported window.
 - static_demo.metadata.json: complete saved configuration, input file hashes,
   diagnostics, thresholds, scoring references, weights and known limitations.
-- static_demo_plots/: eight diagnostic charts.
+- static_demo_plots/: seven diagnostic charts.
 
 --forecast-model supplies an **unverified label**. It does not select, run,
 or evaluate a forecasting model.
@@ -247,8 +247,14 @@ omitted or explicitly labelled; they are never replaced by apparent zeros.
 | slo_violations.png | Fixed benchmark violation fractions; average TBT is labelled precisely. |
 | cv_scatter.png | Response-time variability versus prompt-size variability; no forecastability claim. |
 | resource_usage.png | Production/spot instance-hours with resource-coverage status. |
-| data_coverage.png | Valid measurements / observed rows, with incomplete-export warnings. |
 | completions_by_window.png | Completion counts including quiet windows; red crosses indicate observed subsets. |
+
+The web UI's Results page displays data coverage as an interactive table for the
+selected report, above the diagnostic plots. It includes valid measurement counts
+and percentages, exported windows, missing application exports, request-export
+completeness, resource coverage and known export duration. Percentages use observed
+request rows; zero-sample or unavailable values remain blank. Existing reports
+work without regeneration, and legacy `data_coverage.png` files are hidden in the UI.
 
 ## Optional forecast error evaluation
 
