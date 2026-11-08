@@ -15,6 +15,7 @@ from core import (MLOPS_DIR, MLOPS_PYTHON, REGISTRY_DIR, REPO_ROOT, REPORT_DIR, 
                   registry_models, run_command, version_labels)
 from ui import flow, go, page_header, pill
 from allocation_view import render_allocation
+from drift_view import render_drift
 
 MOSS, SAGE = "#436850", "#ADBC9F"
 
@@ -402,6 +403,7 @@ def render_results() -> None:
                 command.append("--allow-partial")
             run_command(command, REPO_ROOT, "Inference report")
     _reports()
+    render_drift()
 
 
 def _coverage_data(data: pd.DataFrame) -> pd.DataFrame:
