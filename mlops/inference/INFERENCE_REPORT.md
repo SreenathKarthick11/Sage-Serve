@@ -317,6 +317,62 @@ The optional `--archive-current` flag only archives older `r4` and
 `rfws_matrix_*`/`fss_matrix_*` output families. It does not clear every existing
 study. Each new study remains isolated regardless of other saved outputs.
 
+## Allocation evidence and the Results UI
+
+New matrix runs automatically extract allocation evidence after analysis.
+For an existing study, run this from the repository root (no simulation or
+forecast fitting is performed):
+
+~~~powershell
+.\mlops\.venv\Scripts\python.exe -X utf8 mlops/inference/allocation.py --report mlops/inference/reports/s01.csv
+~~~
+
+Extraction writes into `reports/s01/allocation/`:
+
+| File | Contents |
+|---|---|
+| allocation_decisions.csv | Logged current counts, requested changes and calculated targets, per model/region. |
+| allocation_observations.csv | Actual saved arbiter production/spot snapshots; last exported row retained at duplicate timestamps. |
+| allocation_coverage.csv | Snapshot counts and first/last observation times for every model/region/case. |
+| allocation_hour_comparison.csv | Before/after observations around the first LTS decision at or after 3600 seconds. |
+| allocation.metadata.json | Source hashes, report hash, extraction issues and interpretation limits. |
+
+Refresh the Results page and select `s01.csv`, then choose an allocation
+region (westus by default). Four model charts show that region's production
+instance counts. Each model chart has four separate policy lanes on white
+backgrounds, so equal counts do not overlap. All regional snapshots are kept;
+no synchronization with other regions is required. In s01, initial counts
+are eight per model for each region, rather than the 24-instance regional sum.
+
+At time zero, counts come from the saved initial configuration and observed
+change is zero. Later points come from arbiter snapshots or current counts
+logged immediately before optimizer decisions. Hover shows the region, count,
+LTS requested delta/target and count difference since the previous known state.
+LTS requested change is Not applicable for baseline and STS-only because LTS
+is disabled; an initial state or snapshot without an optimizer decision is
+marked No decision at this sample. Zero is shown for a requested delta only
+when an actual logged decision requests zero change.
+
+All model charts share time and count scales within the selected region.
+Coincident pre-decision and exported states remain separate events. Differences
+between known counts can include STS and do not prove execution of an optimizer
+request. Baseline has an initial point but no invented later measurements.
+Dashed lines connect known samples as visual guides; they do not establish when
+changes occurred between observations and never extend beyond the last count.
+
+The allocation section contains four charts and the region selector, without
+supporting tables or coverage captions. Existing evidence CSVs remain available
+on disk for auditing. Configured initial counts are stored in
+allocation.metadata.json; re-extract older studies if initial counts are absent.
+Counts are model instances, not individual GPUs. In s01, counts recorded just
+before the second LTS decision are available even though post-decision exports
+are not. No simulator rerun is needed to switch between saved regions.
+
+This extraction supports single-GPU-type allocation matrices from the current
+simulator and uses saved Hydra configuration to map region/model indices.
+Missing mappings, malformed decision matrices and invalid resource files are
+reported in extraction metadata rather than filled with invented values.
+
 ## Plots
 
 All plots use numeric positions and experiment identifiers, so configurations

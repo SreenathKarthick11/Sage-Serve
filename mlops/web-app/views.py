@@ -14,6 +14,7 @@ from core import (MLOPS_DIR, MLOPS_PYTHON, REGISTRY_DIR, REPO_ROOT, REPORT_DIR, 
                   SIM_DIR, SIM_PYTHON, artifact_versions, last_job, lineage_records, read_json,
                   registry_models, run_command, version_labels)
 from ui import flow, go, page_header, pill
+from allocation_view import render_allocation
 
 MOSS, SAGE = "#436850", "#ADBC9F"
 
@@ -522,6 +523,7 @@ def _reports() -> None:
                    "Blank values are unavailable, including percentages with no request samples. "
                    "Complete request exports do not establish coverage of the entire simulation.")
         _show_completions(report)
+        render_allocation(report)
         if plots:
             st.subheader(f"Diagnostic plots ({len(plots)})")
             for i in range(0, len(plots), 2):

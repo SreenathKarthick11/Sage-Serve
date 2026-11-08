@@ -286,6 +286,8 @@ def analyze(study, report_path):
     metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
     metadata["matrix_plot_layout"] = f"one panel per model, {len(CASES)} configurations per panel"
     metadata["matrix_evidence"] = str(Path(study) / "manifest.json")
+    from inference.allocation import export_allocations
+    metadata["allocation_evidence"] = str(export_allocations(report_path))
     save_json(metadata_path, metadata)
     inputs = ["viol_ttft", "viol_avg_tbt", "cv_response", "prompt_size_cv", "requests_per_window"]
     variation = metrics.groupby("model")[inputs].nunique(dropna=False)
