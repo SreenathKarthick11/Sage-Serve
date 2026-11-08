@@ -2,18 +2,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+import textwrap
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 
 _COLORS = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3"]
+FIGURE_SIZE = (12, 6)
+FIGURE_DPI = 130
 
 
 def _row_label(row):
-    return (f"{row['model']} | {row.get('trace', '?')} | run {row.get('run', '?')} | "
+    return (f"{row['model']} | run {row.get('run', '?')} | "
             f"{str(row.get('experiment_id', '?'))[:8]}\n"
             f"LTS={row.get('lts', '?')} STS={row.get('sts', '?')} "
             f"async={row.get('feed_async', '?')} scale={row.get('scaling_level', '?')}")
@@ -27,17 +31,19 @@ def _save(fig, out_dir, name):
     path = Path(out_dir) / name
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        fig.tight_layout()
-        fig.savefig(path, dpi=130)
+        # Explicit margins reserve label/legend space without changing the canvas.
+        with matplotlib.rc_context({"savefig.bbox": None}):
+            fig.savefig(path, dpi=FIGURE_DPI, bbox_inches=None)
     finally:
         plt.close(fig)
     return path
 
 
-def _horizontal(df, width=12):
-    fig, ax = plt.subplots(figsize=(width, max(3.5, .8*len(df))))
+def _horizontal(df):
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE)
+    fig.subplots_adjust(left=.34, right=.97, bottom=.20, top=.90)
     y = np.arange(len(df))
-    ax.set_yticks(y, _labels(df), fontsize=8)
+    ax.set_yticks(y, _labels(df), fontsize=max(6, min(8, 40 / max(1, len(df)))))
     ax.set_ylim(-.65, len(df)-.35)
     return fig, ax, y
 
@@ -55,7 +61,8 @@ def plot_fss_bar(df, out_dir):
     valid = data.fss.notna().to_numpy()
     ax.barh(y[valid], data.fss[valid], color="#4C72B0")
     for position, (_, row) in zip(y, data.iterrows()):
-        text = f"{row.fss:.1f}" if pd.notna(row.fss) else f"unavailable: {row.fss_status}"
+        text = (f"{row.fss:.1f}" if pd.notna(row.fss) else
+                textwrap.fill(f"unavailable: {row.fss_status}", width=58))
         ax.text(row.fss+1 if pd.notna(row.fss) else 1, position, text, va="center", fontsize=8)
     ax.set_xlim(0, 110)
     ax.set_xlabel("Relative FSS (0–100); compare only within the same cohort")
@@ -79,7 +86,9 @@ def plot_sub_scores(df, out_dir):
     ax.set_xlim(0, 105)
     ax.set_xlabel("Weighted contribution in FSS points (sum = FSS)")
     ax.set_title("What contributes to the relative score")
-    ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(0, -.16), ncol=2)
+    handles = [Patch(facecolor=color, label=label) for color, (_, label) in zip(_COLORS, names)]
+    fig.legend(handles=handles, fontsize=7, loc="lower center",
+               bbox_to_anchor=(.65, .02), ncol=2)
     return _save(fig, out_dir, "sub_scores.png")
 
 
@@ -117,7 +126,8 @@ def plot_slo_violations(df, out_dir):
 
 
 def plot_cv_scatter(df, out_dir):
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE)
+    fig.subplots_adjust(left=.11, right=.91, bottom=.20, top=.90)
     valid = df.cv_response.notna() & df.prompt_size_cv.notna()
     scored = valid & df.fss.notna()
     if scored.any():
@@ -160,32 +170,10 @@ def plot_resource_usage(df, out_dir):
     return _save(fig, out_dir, "resource_usage.png")
 
 
-def plot_completions(windows, out_dir):
-    groups = list(windows.groupby(["experiment_id", "model"], sort=True))
-    fig, axes = plt.subplots(max(1, len(groups)), 1, figsize=(11, max(3, 2.4*len(groups))), squeeze=False)
-    for ax, ((experiment, model), group) in zip(axes[:, 0], groups):
-        group = group.sort_values("window")
-        ax.plot(group.window, group.completed_requests, marker="o", color=_COLORS[0])
-        missing = group.completed_requests.isna()
-        if missing.any():
-            ax.scatter(group.loc[missing, "window"], group.loc[missing, "observed_requests"],
-                       marker="x", color="#a33", label="Observed subset; export incomplete")
-            ax.legend(fontsize=8)
-        ax.set_xticks(group.window)
-        ax.set_title(f"{model} | {experiment[:8]} — completed requests by export window", fontsize=9)
-        ax.set_ylabel("Completions")
-        ax.set_ylim(bottom=0)
-        ax.grid(alpha=.2)
-    axes[-1, 0].set_xlabel("Export window index (not a timestamp; exact duration may be unknown)")
-    return _save(fig, out_dir, "completions_by_window.png")
-
-
 def generate_all(df, out_dir, *, windows=None):
     if df.empty:
         raise ValueError("Cannot plot an empty inference report")
     functions = [plot_fss_bar, plot_sub_scores, plot_latency_pct, plot_slo_violations,
                  plot_cv_scatter, plot_resource_usage]
     paths = [function(df, out_dir) for function in functions]
-    if windows is not None and not windows.empty:
-        paths.append(plot_completions(windows, out_dir))
     return paths

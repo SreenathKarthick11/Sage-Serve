@@ -433,6 +433,47 @@ def _coverage_data(data: pd.DataFrame) -> pd.DataFrame:
     return coverage.rename(columns=columns)
 
 
+def _completion_data(windows: pd.DataFrame) -> pd.DataFrame:
+    """Compare models side by side without turning incomplete exports into zeros."""
+    required = {"experiment_id", "model", "window", "completed_requests"}
+    if not required.issubset(windows.columns):
+        raise ValueError("Window report is missing: " + ", ".join(sorted(required - set(windows.columns))))
+    counts = windows.pivot(index=["experiment_id", "window"], columns="model",
+                          values="completed_requests").sort_index()
+    counts = counts.apply(pd.to_numeric, errors="coerce").astype("Int64")
+    counts.columns = [f"{model} completions" for model in counts.columns]
+    return counts.reset_index().rename(columns={"experiment_id": "Experiment", "window": "Window"})
+
+
+def _show_completions(report: Path) -> None:
+    st.subheader("Completions by window")
+    windows_path = report.with_name(report.stem + "_windows.csv")
+    if not windows_path.is_file():
+        st.info("Window measurements are unavailable for this report. Generate a report to create them.")
+        return
+    try:
+        windows = pd.read_csv(windows_path)
+        table = _completion_data(windows)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        st.warning(f"Could not load window measurements: {exc}")
+        return
+    if table.empty:
+        st.info("No exported windows were recorded.")
+        return
+    st.dataframe(table, width="stretch", hide_index=True)
+    st.caption("One row per experiment and export window, with all models side by side. "
+               "Window indexes are not timestamps. Blank counts are unavailable or incomplete; "
+               "zero means a confirmed window with no completions.")
+    if "observed_requests" in windows.columns:
+        partial = windows[windows.completed_requests.isna() & windows.observed_requests.notna()]
+        if not partial.empty:
+            with st.expander("Observed subsets from incomplete exports"):
+                columns = [name for name in ("experiment_id", "model", "window", "observed_requests",
+                                             "request_data_complete", "n_unexported_live_applications")
+                           if name in partial.columns]
+                st.dataframe(partial[columns], width="stretch", hide_index=True)
+
+
 def _reports() -> None:
     reports = (sorted((p for p in REPORT_DIR.glob("*.csv") if not p.stem.endswith("_windows")),
                       key=lambda p: p.stat().st_mtime, reverse=True) if REPORT_DIR.is_dir() else [])
@@ -467,9 +508,10 @@ def _reports() -> None:
             chart[metric] = pd.to_numeric(chart[metric], errors="coerce")
             st.bar_chart(chart.set_index(label_col), height=260, color=MOSS)
         plots_dir = REPORT_DIR / f"{report.stem}_plots"
-        # Old report folders can still contain the retired coverage chart.
-        plots = (sorted(p for p in plots_dir.glob("*.png") if p.name != "data_coverage.png")
-                 if plots_dir.is_dir() else [])
+        # Explicit pairs keep legacy table charts out of the six-image grid.
+        plot_names = ["fss_bar.png", "sub_scores.png", "latency_pct.png",
+                      "slo_violations.png", "resource_usage.png", "cv_scatter.png"]
+        plots = [plots_dir / name for name in plot_names if (plots_dir / name).is_file()]
         st.subheader("Data coverage")
         st.dataframe(
             _coverage_data(data), width="stretch", hide_index=True,
@@ -479,11 +521,12 @@ def _reports() -> None:
         st.caption("Coverage percentages use observed request rows, not all input arrivals. "
                    "Blank values are unavailable, including percentages with no request samples. "
                    "Complete request exports do not establish coverage of the entire simulation.")
+        _show_completions(report)
         if plots:
             st.subheader(f"Diagnostic plots ({len(plots)})")
             for i in range(0, len(plots), 2):
                 cols = st.columns(2)
                 for off, plot in enumerate(plots[i:i + 2]):
                     with cols[off]:
-                        st.image(str(plot), caption=plot.stem.replace("_", " ").title())
+                        st.image(str(plot), caption=plot.stem.replace("_", " ").title(), width="stretch")
         st.caption(f"CSV: `{report}` · Plots: `{plots_dir}`")
