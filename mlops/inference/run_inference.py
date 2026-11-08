@@ -7,7 +7,7 @@ Example (from the repository root):
 
 Exit codes: 0 = outputs requested were written; 1 = failed; 2 = partial output
 (incomplete request exports, explicitly skipped inputs, or failed plots).
-Unknown duration or unavailable relative FSS are reported statuses, not crashes.
+Unknown duration or unavailable relative rfws are reported statuses, not crashes.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from inference.metrics import DEFAULT_WEIGHTS, _json_safe, build_report
 
 
 def _build_parser():
-    parser = argparse.ArgumentParser(description="Analyze exported simulation measurements; FSS is cohort-relative.")
+    parser = argparse.ArgumentParser(description="Analyze exported simulation measurements; rfws is cohort-relative.")
     parser.add_argument("--results", default=str(_HERE.parents[1] / "experiments" / "results"))
     parser.add_argument("--out", default=str(_HERE / "inference_report.csv"))
     parser.add_argument("--plots-dir", default=str(_HERE / "plots"))
@@ -93,11 +93,11 @@ def main(argv=None):
         return 1
 
     columns = ["experiment_id", "model", "n_requests", "n_windows", "n_quiet_windows",
-               "e2e_p99", "viol_ttft", "viol_avg_tbt", "resource_coverage_status", "fss", "fss_status"]
+               "e2e_p99", "viol_ttft", "viol_avg_tbt", "resource_coverage_status", "rfws", "rfws_status"]
     print(report.metrics[columns].to_string(index=False, float_format=lambda x: f"{x:.4g}"))
     print(f"\nNormalized weights: {metadata['normalized_weights']}")
     print(f"Saved report: {out}\nSaved window measurements: {windows_path}\nSaved provenance: {metadata_path}")
-    print("FSS values are comparable only within the same fss_cohort_id; missing scores remain unknown.")
+    print("rfws values are comparable only within the same rfws_cohort_id; missing scores remain unknown.")
     print("See metadata.upstream_limitations for simulator export limitations.")
     return 2 if partial else 0
 

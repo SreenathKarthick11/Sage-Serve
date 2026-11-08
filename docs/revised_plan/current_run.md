@@ -763,7 +763,7 @@ Running the inference script produces the following outputs under the specified 
 * **Main CSV report (`<out>.csv`)**: Summary metrics with one row per experiment and model.
 * **Per-window CSV (`<out_prefix>_windows.csv`)**: Metrics broken down with one row per experiment, model, and exported window.
 * **Metadata JSON (`<out_prefix>.metadata.json`)**: Complete configuration, input file hashes, diagnostics, thresholds, scoring references, weights, and known limitations.
-* **Diagnostic plots (`<plots_dir>/`)**: Up to 8 diagnostic charts (`fss_bar.png`, `sub_scores.png`, `latency_pct.png`, `slo_violations.png`, `cv_scatter.png`, `resource_usage.png`, `data_coverage.png`, `completions_by_window.png`). Use `--no-plots` to skip chart generation.
+* **Diagnostic plots (`<plots_dir>/`)**: Up to 8 diagnostic charts (`rfws_bar.png`, `sub_scores.png`, `latency_pct.png`, `slo_violations.png`, `cv_scatter.png`, `resource_usage.png`, `data_coverage.png`, `completions_by_window.png`). Use `--no-plots` to skip chart generation.
 
 ### 7c. Exit codes
 

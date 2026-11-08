@@ -497,7 +497,7 @@ def _reports() -> None:
                     st.dataframe(pd.DataFrame(diag), width="stretch", hide_index=True)
             with st.expander("Report provenance"):
                 st.json({k: meta.get(k) for k in ("output_status", "normalized_weights", "upstream_limitations", "outputs")})
-        numeric = [c for c in ("e2e_p99", "viol_ttft", "viol_avg_tbt", "fss")
+        numeric = [c for c in ("e2e_p99", "viol_ttft", "viol_avg_tbt", "rfws")
                    if c in data.columns and pd.to_numeric(data[c], errors="coerce").notna().any()]
         if numeric and not data.empty:
             metric = st.segmented_control("Plot metric", numeric, default=numeric[0], key="plot-metric") or numeric[0]
@@ -509,7 +509,7 @@ def _reports() -> None:
             st.bar_chart(chart.set_index(label_col), height=260, color=MOSS)
         plots_dir = REPORT_DIR / f"{report.stem}_plots"
         # Explicit pairs keep legacy table charts out of the six-image grid.
-        plot_names = ["fss_bar.png", "sub_scores.png", "latency_pct.png",
+        plot_names = ["rfws_bar.png", "sub_scores.png", "latency_pct.png",
                       "slo_violations.png", "resource_usage.png", "cv_scatter.png"]
         plots = [plots_dir / name for name in plot_names if (plots_dir / name).is_file()]
         st.subheader("Data coverage")

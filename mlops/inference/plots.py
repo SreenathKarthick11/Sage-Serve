@@ -55,25 +55,25 @@ def _unknown(ax, positions, values, label="unknown"):
                     va="center", fontsize=8, color="#666")
 
 
-def plot_fss_bar(df, out_dir):
-    data = df.sort_values("fss", na_position="first").reset_index(drop=True)
+def plot_rfws_bar(df, out_dir):
+    data = df.sort_values("rfws", na_position="first").reset_index(drop=True)
     fig, ax, y = _horizontal(data)
-    valid = data.fss.notna().to_numpy()
-    ax.barh(y[valid], data.fss[valid], color="#4C72B0")
+    valid = data.rfws.notna().to_numpy()
+    ax.barh(y[valid], data.rfws[valid], color="#4C72B0")
     for position, (_, row) in zip(y, data.iterrows()):
-        text = (f"{row.fss:.1f}" if pd.notna(row.fss) else
-                textwrap.fill(f"unavailable: {row.fss_status}", width=58))
-        ax.text(row.fss+1 if pd.notna(row.fss) else 1, position, text, va="center", fontsize=8)
+        text = (f"{row.rfws:.1f}" if pd.notna(row.rfws) else
+                textwrap.fill(f"unavailable: {row.rfws_status}", width=58))
+        ax.text(row.rfws+1 if pd.notna(row.rfws) else 1, position, text, va="center", fontsize=8)
     ax.set_xlim(0, 110)
-    ax.set_xlabel("Relative FSS (0–100); compare only within the same cohort")
+    ax.set_xlabel("Relative rfws (0–100); compare only within the same cohort")
     ax.set_title("Relative scores by experiment and model")
-    return _save(fig, out_dir, "fss_bar.png")
+    return _save(fig, out_dir, "rfws_bar.png")
 
 
 def plot_sub_scores(df, out_dir):
-    """Stack actual normalized, weighted contributions; their sum equals FSS."""
+    """Stack actual normalized, weighted contributions; their sum equals rfws."""
     fig, ax, y = _horizontal(df)
-    valid = df.fss.notna().to_numpy()
+    valid = df.rfws.notna().to_numpy()
     left = np.zeros(int(valid.sum()))
     names = [("slo", "Benchmark compliance"), ("stability", "Response stability"),
              ("demand", "Prompt-size regularity"), ("cost", "Instance-hour proxy"),
@@ -82,9 +82,9 @@ def plot_sub_scores(df, out_dir):
         values = df.loc[valid, f"contribution_{name}"].to_numpy()
         ax.barh(y[valid], values, left=left, color=color, label=label)
         left += values
-    _unknown(ax, y, df.fss, "FSS unavailable; see report status")
+    _unknown(ax, y, df.rfws, "rfws unavailable; see report status")
     ax.set_xlim(0, 105)
-    ax.set_xlabel("Weighted contribution in FSS points (sum = FSS)")
+    ax.set_xlabel("Weighted contribution in rfws points (sum = rfws)")
     ax.set_title("What contributes to the relative score")
     handles = [Patch(facecolor=color, label=label) for color, (_, label) in zip(_COLORS, names)]
     fig.legend(handles=handles, fontsize=7, loc="lower center",
@@ -129,15 +129,15 @@ def plot_cv_scatter(df, out_dir):
     fig, ax = plt.subplots(figsize=FIGURE_SIZE)
     fig.subplots_adjust(left=.11, right=.91, bottom=.20, top=.90)
     valid = df.cv_response.notna() & df.prompt_size_cv.notna()
-    scored = valid & df.fss.notna()
+    scored = valid & df.rfws.notna()
     if scored.any():
         points = ax.scatter(df.loc[scored, "cv_response"], df.loc[scored, "prompt_size_cv"],
-                            c=df.loc[scored, "fss"], vmin=0, vmax=100, cmap="viridis", s=70)
-        fig.colorbar(points, ax=ax, label="Relative FSS (same cohort only)")
-    unscored = valid & df.fss.isna()
+                            c=df.loc[scored, "rfws"], vmin=0, vmax=100, cmap="viridis", s=70)
+        fig.colorbar(points, ax=ax, label="Relative rfws (same cohort only)")
+    unscored = valid & df.rfws.isna()
     if unscored.any():
         ax.scatter(df.loc[unscored, "cv_response"], df.loc[unscored, "prompt_size_cv"],
-                   c="#777", s=70, label="FSS unavailable")
+                   c="#777", s=70, label="rfws unavailable")
         ax.legend()
     for _, row in df[valid].iterrows():
         ax.annotate(f"{row.model} | {row.experiment_id[:8]}", (row.cv_response, row.prompt_size_cv),
@@ -173,7 +173,7 @@ def plot_resource_usage(df, out_dir):
 def generate_all(df, out_dir, *, windows=None):
     if df.empty:
         raise ValueError("Cannot plot an empty inference report")
-    functions = [plot_fss_bar, plot_sub_scores, plot_latency_pct, plot_slo_violations,
+    functions = [plot_rfws_bar, plot_sub_scores, plot_latency_pct, plot_slo_violations,
                  plot_cv_scatter, plot_resource_usage]
     paths = [function(df, out_dir) for function in functions]
     return paths

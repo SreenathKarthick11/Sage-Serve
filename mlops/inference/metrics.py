@@ -1,6 +1,6 @@
 """Latency, completion volume and observed resource metrics for simulator exports.
 
-Raw measurements are primary. FSS is a relative score within a shared model,
+Raw measurements are primary. rfws is a relative score within a shared model,
 trace and window inventory; it is neither forecast accuracy nor an absolute SLO.
 """
 from __future__ import annotations
@@ -51,14 +51,14 @@ def normalize_weights(overrides=None):
     supplied = overrides or {}
     unknown = set(supplied) - set(DEFAULT_WEIGHTS)
     if unknown:
-        raise ValueError(f"Unknown FSS weights: {sorted(unknown)}")
+        raise ValueError(f"Unknown rfws weights: {sorted(unknown)}")
     weights = {**DEFAULT_WEIGHTS, **supplied}
     for name, value in weights.items():
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not np.isfinite(value) or value < 0:
-            raise ValueError(f"FSS weight {name} must be finite and nonnegative")
+            raise ValueError(f"rfws weight {name} must be finite and nonnegative")
     total = sum(weights.values())
     if total <= 0:
-        raise ValueError("At least one FSS weight must be positive")
+        raise ValueError("At least one rfws weight must be positive")
     return {key: value / total for key, value in weights.items()}
 
 
@@ -216,20 +216,20 @@ def _minmax(s):
     return result
 
 
-def _compute_fss(df, weights):
+def _compute_rfws(df, weights):
     """Score eligible peers together; return rows plus explicit references."""
     out = df.copy()
     out["score_slo"] = 1-(out.viol_ttft+out.viol_avg_tbt)/2
     out["score_stability"] = 1/(1+out.cv_response)
     out["score_demand"] = 1/(1+out.prompt_size_cv)
-    for col in ("score_cost", "score_throughput", "fss"):
+    for col in ("score_cost", "score_throughput", "rfws"):
         out[col] = np.nan
     for name in weights:
         out[f"contribution_{name}"] = np.nan
         out[f"weight_{name}"] = weights[name]
     out["scoring_method"] = SCORING_METHOD
-    out["fss_cohort_id"] = ""
-    out["fss_status"] = "insufficient_comparable_peers"
+    out["rfws_cohort_id"] = ""
+    out["rfws_status"] = "insufficient_comparable_peers"
     references = []
     for (model, trace, signature), group in out.groupby(["model", "trace", "window_signature"], dropna=False):
         eligible = pd.Series(True, index=group.index)
@@ -249,7 +249,7 @@ def _compute_fss(df, weights):
                     reasons[idx].append(f"unknown_{name}")
             if reasons[idx]:
                 eligible.loc[idx] = False
-                out.loc[idx, "fss_status"] = ";".join(reasons[idx])
+                out.loc[idx, "rfws_status"] = ";".join(reasons[idx])
         peers = group[eligible]
         reference = {"method": SCORING_METHOD, "model": model, "trace": trace, "window_signature": signature,
                      "thresholds_seconds": {"ttft": group.ttft_threshold_seconds.iloc[0],
@@ -268,13 +268,13 @@ def _compute_fss(df, weights):
         # JSON null, not nonstandard NaN, keeps metadata portable.
         reference = _json_safe(reference)
         cohort_id = hashlib.sha256(json.dumps(reference, sort_keys=True).encode()).hexdigest()[:16]
-        out.loc[group.index, "fss_cohort_id"] = cohort_id
+        out.loc[group.index, "rfws_cohort_id"] = cohort_id
         reference["cohort_id"] = cohort_id
         references.append(reference)
         if len(peers) < 2:
             for idx in group.index:
-                if out.loc[idx, "fss_status"] != "insufficient_comparable_peers":
-                    out.loc[idx, "fss_status"] += ";insufficient_comparable_peers"
+                if out.loc[idx, "rfws_status"] != "insufficient_comparable_peers":
+                    out.loc[idx, "rfws_status"] += ";insufficient_comparable_peers"
             continue
         total = pd.Series(0., index=peers.index)
         for name, values in inputs.items():
@@ -287,15 +287,15 @@ def _compute_fss(df, weights):
             contribution = norm*weights[name]*100 if weights[name] else pd.Series(0., index=peers.index)
             out.loc[peers.index, f"contribution_{name}"] = contribution
             total += contribution
-        out.loc[peers.index, "fss"] = total
-        out.loc[peers.index, "fss_status"] = "relative_to_cohort"
+        out.loc[peers.index, "rfws"] = total
+        out.loc[peers.index, "rfws_status"] = "relative_to_cohort"
     return out, references
 
 
-def build_report(results_root, fss_weights=None, forecast_model_tag="baseline", *,
+def build_report(results_root, rfws_weights=None, forecast_model_tag="baseline", *,
                  allow_partial=False, window_boundaries=None,
                  ttft_threshold=SLO_TTFT, tbt_threshold=SLO_TBT):
-    weights = normalize_weights(fss_weights)
+    weights = normalize_weights(rfws_weights)
     for name, value in (("TTFT", ttft_threshold), ("average TBT", tbt_threshold)):
         if not np.isfinite(value) or value <= 0:
             raise ValueError(f"{name} threshold must be finite and positive")
@@ -338,9 +338,9 @@ def build_report(results_root, fss_weights=None, forecast_model_tag="baseline", 
             row["vm_h_per_1000_completions"] = (hours/len(g)*1000 if len(g) and
                                                row["resource_coverage_status"] == "complete" and row["request_data_complete"] else np.nan)
             rows.append(row)
-    metrics, references = _compute_fss(pd.DataFrame(rows), weights)
+    metrics, references = _compute_rfws(pd.DataFrame(rows), weights)
     metrics.insert(0, "forecast_model", forecast_model_tag)
-    metrics = metrics.sort_values(["fss", "experiment_id", "model"], ascending=[False, True, True], na_position="last").reset_index(drop=True)
+    metrics = metrics.sort_values(["rfws", "experiment_id", "model"], ascending=[False, True, True], na_position="last").reset_index(drop=True)
     metadata = {"schema_version": 2, "scoring_method": SCORING_METHOD, "normalized_weights": weights,
                 "benchmark_thresholds_seconds": {"ttft": ttft_threshold, "request_average_tbt": tbt_threshold},
                 "forecast_model_label": forecast_model_tag, "forecast_provenance_verified": False,
@@ -350,7 +350,7 @@ def build_report(results_root, fss_weights=None, forecast_model_tag="baseline", 
                                  "unexported_live_applications": {str(w): sorted(names) for w, names in e.unexported_applications.items()},
                                  "explicit_boundaries": {str(w): list(b) for w, b in e.bounds.items()}}
                                 for e in results.experiments],
-                "fss_cohorts": references, "upstream_limitations": UPSTREAM_LIMITATIONS}
+                "rfws_cohorts": references, "upstream_limitations": UPSTREAM_LIMITATIONS}
     if window_boundaries:
         from pathlib import Path
         path = Path(window_boundaries).resolve()
@@ -358,12 +358,12 @@ def build_report(results_root, fss_weights=None, forecast_model_tag="baseline", 
     return Report(metrics, windows, metadata)
 
 
-def compute_metrics(results_root, fss_weights=None, forecast_model_tag="baseline", **kwargs):
+def compute_metrics(results_root, rfws_weights=None, forecast_model_tag="baseline", **kwargs):
     """Return one row per experiment/model; metadata is available in df.attrs.
 
     Use build_report for the companion per-window table and structured diagnostics.
     """
-    report = build_report(results_root, fss_weights, forecast_model_tag, **kwargs)
+    report = build_report(results_root, rfws_weights, forecast_model_tag, **kwargs)
     for issue in report.metadata["diagnostics"]:
         import warnings
         warnings.warn(f"{issue['code']}: {issue['path']}: {issue['message']}", RuntimeWarning, stacklevel=2)
