@@ -70,6 +70,13 @@ def main(argv=None):
         out.parent.mkdir(parents=True, exist_ok=True)
         report.metrics.to_csv(out, index=False)
         report.windows.to_csv(windows_path, index=False)
+        try:
+            from inference.allocation import export_allocations
+            metadata["allocation_evidence"] = str(export_allocations(out))
+        except Exception as exc:
+            metadata["allocation_error"] = str(exc)
+            print(f"WARNING: allocation extraction skipped: {exc}", file=sys.stderr)
+
         metadata["plot_status"] = "skipped" if args.no_plots else "pending"
         # Write provenance even if plotting later fails.
         metadata_path.write_text(json.dumps(_json_safe(metadata), indent=2, allow_nan=False) + "\n")

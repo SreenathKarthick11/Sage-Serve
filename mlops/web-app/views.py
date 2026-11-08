@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
-
+import shlex
 import pandas as pd
 import streamlit as st
 import yaml
@@ -394,14 +394,23 @@ def render_results() -> None:
         if not safe:
             st.warning("Report name must be a plain file name without slashes.")
         if st.button("Generate report", type="primary", disabled=not safe):
-            command = [str(MLOPS_PYTHON), str(MLOPS_DIR / "inference" / "run_inference.py"),
-                       "--results", str(Path(results_dir).expanduser().resolve()),
-                       "--forecast-model", forecast_model,
-                       "--out", str(REPORT_DIR / f"{report_name}.csv"),
-                       "--plots-dir", str(REPORT_DIR / f"{report_name}_plots")]
+            report_csv = REPORT_DIR / f"{report_name}.csv"
+            inference = [str(MLOPS_PYTHON), str(MLOPS_DIR / "inference" / "run_inference.py"),
+                         "--results", str(Path(results_dir).expanduser().resolve()),
+                         "--forecast-model", forecast_model,
+                         "--out", str(report_csv),
+                         "--plots-dir", str(REPORT_DIR / f"{report_name}_plots")]
             if allow_partial:
-                command.append("--allow-partial")
-            run_command(command, REPO_ROOT, "Inference report")
+                inference.append("--allow-partial")
+            allocation = [str(MLOPS_PYTHON), "-X", "utf8",
+                          str(MLOPS_DIR / "inference" / "allocation.py"),
+                          "--report", str(report_csv)]
+            # Run the report, then extract allocations unless the report itself failed (exit 1).
+            # The job's exit code stays the report's, so exit code 2 still shows as "partial".
+            script = (f"{shlex.join(inference)}; rc=$?; "
+                      f"if [ $rc -ne 1 ]; then {shlex.join(allocation)} "
+                      f"|| echo 'WARNING: allocation extraction failed' >&2; fi; exit $rc")
+            run_command(["bash", "-c", script], REPO_ROOT, "Inference report")
     _reports()
     render_drift()
 

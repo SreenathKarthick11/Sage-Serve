@@ -6,7 +6,7 @@ from pathlib import Path
 import altair as alt
 import pandas as pd
 import streamlit as st
-
+from core import MLOPS_DIR, MLOPS_PYTHON, run_command
 
 def allocation_timeline(decisions, observations, initial, region):
     """Use one region's saved states without requiring synchronized regional samples."""
@@ -48,17 +48,27 @@ def allocation_timeline(decisions, observations, initial, region):
         else f"{row.requested_change:+g}", axis=1)
     return timeline
 
+def _extract_button(report):
+    if st.button("Extract allocation evidence", type="primary",
+                 key=f"extract-allocation-{Path(report).stem}"):
+        run_command([str(MLOPS_PYTHON), "-X", "utf8",
+                     str(MLOPS_DIR / "inference" / "allocation.py"),
+                     "--report", str(report)],
+                    MLOPS_DIR, "Allocation extraction")
+
 
 def render_allocation(report):
     folder = Path(report).with_suffix("") / "allocation"
     st.subheader("Instance counts and allocation changes by region")
     if not folder.is_dir():
         st.info("No allocation evidence extracted for this report yet.")
+        _extract_button(report)
         return
     try:
         metadata = json.loads((folder / "allocation.metadata.json").read_text(encoding="utf-8"))
         if metadata["report_sha256"] != hashlib.sha256(Path(report).read_bytes()).hexdigest():
             st.warning("This report changed after extraction. Extract its allocation evidence again.")
+            _extract_button(report)
             return
         decisions = pd.read_csv(folder / "allocation_decisions.csv")
         observations = pd.read_csv(folder / "allocation_observations.csv")
