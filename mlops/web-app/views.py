@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
-
+import shlex
 import pandas as pd
 import streamlit as st
 import yaml
@@ -14,6 +14,8 @@ from core import (MLOPS_DIR, MLOPS_PYTHON, REGISTRY_DIR, REPO_ROOT, REPORT_DIR, 
                   SIM_DIR, SIM_PYTHON, artifact_versions, last_job, lineage_records, read_json,
                   registry_models, run_command, version_labels)
 from ui import flow, go, page_header, pill
+from allocation_view import render_allocation
+from drift_view import render_drift
 
 MOSS, SAGE = "#436850", "#ADBC9F"
 
@@ -392,15 +394,96 @@ def render_results() -> None:
         if not safe:
             st.warning("Report name must be a plain file name without slashes.")
         if st.button("Generate report", type="primary", disabled=not safe):
-            command = [str(MLOPS_PYTHON), str(MLOPS_DIR / "inference" / "run_inference.py"),
-                       "--results", str(Path(results_dir).expanduser().resolve()),
-                       "--forecast-model", forecast_model,
-                       "--out", str(REPORT_DIR / f"{report_name}.csv"),
-                       "--plots-dir", str(REPORT_DIR / f"{report_name}_plots")]
+            report_csv = REPORT_DIR / f"{report_name}.csv"
+            inference = [str(MLOPS_PYTHON), str(MLOPS_DIR / "inference" / "run_inference.py"),
+                         "--results", str(Path(results_dir).expanduser().resolve()),
+                         "--forecast-model", forecast_model,
+                         "--out", str(report_csv),
+                         "--plots-dir", str(REPORT_DIR / f"{report_name}_plots")]
             if allow_partial:
-                command.append("--allow-partial")
-            run_command(command, REPO_ROOT, "Inference report")
+                inference.append("--allow-partial")
+            allocation = [str(MLOPS_PYTHON), "-X", "utf8",
+                          str(MLOPS_DIR / "inference" / "allocation.py"),
+                          "--report", str(report_csv)]
+            # Run the report, then extract allocations unless the report itself failed (exit 1).
+            # The job's exit code stays the report's, so exit code 2 still shows as "partial".
+            script = (f"{shlex.join(inference)}; rc=$?; "
+                      f"if [ $rc -ne 1 ]; then {shlex.join(allocation)} "
+                      f"|| echo 'WARNING: allocation extraction failed' >&2; fi; exit $rc")
+            run_command(["bash", "-c", script], REPO_ROOT, "Inference report")
     _reports()
+    render_drift()
+
+
+def _coverage_data(data: pd.DataFrame) -> pd.DataFrame:
+    """Coverage for the selected report; unknown and zero-sample rates stay blank."""
+    columns = {
+        "experiment_id": "Experiment",
+        "model": "Model",
+        "n_requests": "Observed requests",
+        "n_valid_response_times": "Valid response times",
+        "response_coverage": "Response coverage (%)",
+        "n_valid_ttft_times": "Valid TTFT measurements",
+        "ttft_coverage": "TTFT coverage (%)",
+        "n_valid_tbt_times": "Valid average-TBT measurements",
+        "tbt_coverage": "Average-TBT coverage (%)",
+        "n_windows": "Exported windows",
+        "n_unexported_live_applications": "Missing application exports",
+        "request_data_complete": "Request exports complete",
+        "resource_coverage_status": "Resource coverage",
+        "export_duration_seconds": "Known export duration (s)",
+    }
+    coverage = data.reindex(columns=list(columns)).copy()
+    observed = pd.to_numeric(coverage["n_requests"], errors="coerce")
+    denominator = observed.where(observed > 0)
+    for source, target in (
+        ("n_valid_response_times", "response_coverage"),
+        ("n_valid_ttft_times", "ttft_coverage"),
+        ("n_valid_tbt_times", "tbt_coverage"),
+    ):
+        coverage[target] = pd.to_numeric(coverage[source], errors="coerce") / denominator * 100
+    return coverage.rename(columns=columns)
+
+
+def _completion_data(windows: pd.DataFrame) -> pd.DataFrame:
+    """Compare models side by side without turning incomplete exports into zeros."""
+    required = {"experiment_id", "model", "window", "completed_requests"}
+    if not required.issubset(windows.columns):
+        raise ValueError("Window report is missing: " + ", ".join(sorted(required - set(windows.columns))))
+    counts = windows.pivot(index=["experiment_id", "window"], columns="model",
+                          values="completed_requests").sort_index()
+    counts = counts.apply(pd.to_numeric, errors="coerce").astype("Int64")
+    counts.columns = [f"{model} completions" for model in counts.columns]
+    return counts.reset_index().rename(columns={"experiment_id": "Experiment", "window": "Window"})
+
+
+def _show_completions(report: Path) -> None:
+    st.subheader("Completions by window")
+    windows_path = report.with_name(report.stem + "_windows.csv")
+    if not windows_path.is_file():
+        st.info("Window measurements are unavailable for this report. Generate a report to create them.")
+        return
+    try:
+        windows = pd.read_csv(windows_path)
+        table = _completion_data(windows)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        st.warning(f"Could not load window measurements: {exc}")
+        return
+    if table.empty:
+        st.info("No exported windows were recorded.")
+        return
+    st.dataframe(table, width="stretch", hide_index=True)
+    st.caption("One row per experiment and export window, with all models side by side. "
+               "Window indexes are not timestamps. Blank counts are unavailable or incomplete; "
+               "zero means a confirmed window with no completions.")
+    if "observed_requests" in windows.columns:
+        partial = windows[windows.completed_requests.isna() & windows.observed_requests.notna()]
+        if not partial.empty:
+            with st.expander("Observed subsets from incomplete exports"):
+                columns = [name for name in ("experiment_id", "model", "window", "observed_requests",
+                                             "request_data_complete", "n_unexported_live_applications")
+                           if name in partial.columns]
+                st.dataframe(partial[columns], width="stretch", hide_index=True)
 
 
 def _reports() -> None:
@@ -426,7 +509,7 @@ def _reports() -> None:
                     st.dataframe(pd.DataFrame(diag), width="stretch", hide_index=True)
             with st.expander("Report provenance"):
                 st.json({k: meta.get(k) for k in ("output_status", "normalized_weights", "upstream_limitations", "outputs")})
-        numeric = [c for c in ("e2e_p99", "viol_ttft", "viol_avg_tbt", "fss")
+        numeric = [c for c in ("e2e_p99", "viol_ttft", "viol_avg_tbt", "rfws")
                    if c in data.columns and pd.to_numeric(data[c], errors="coerce").notna().any()]
         if numeric and not data.empty:
             metric = st.segmented_control("Plot metric", numeric, default=numeric[0], key="plot-metric") or numeric[0]
@@ -437,12 +520,26 @@ def _reports() -> None:
             chart[metric] = pd.to_numeric(chart[metric], errors="coerce")
             st.bar_chart(chart.set_index(label_col), height=260, color=MOSS)
         plots_dir = REPORT_DIR / f"{report.stem}_plots"
-        plots = sorted(plots_dir.glob("*.png")) if plots_dir.is_dir() else []
+        # Explicit pairs keep legacy table charts out of the six-image grid.
+        plot_names = ["rfws_bar.png", "sub_scores.png", "latency_pct.png",
+                      "slo_violations.png", "resource_usage.png", "cv_scatter.png"]
+        plots = [plots_dir / name for name in plot_names if (plots_dir / name).is_file()]
+        st.subheader("Data coverage")
+        st.dataframe(
+            _coverage_data(data), width="stretch", hide_index=True,
+            column_config={name: st.column_config.NumberColumn(format="%.1f") for name in (
+                "Response coverage (%)", "TTFT coverage (%)", "Average-TBT coverage (%)")},
+        )
+        st.caption("Coverage percentages use observed request rows, not all input arrivals. "
+                   "Blank values are unavailable, including percentages with no request samples. "
+                   "Complete request exports do not establish coverage of the entire simulation.")
+        _show_completions(report)
+        render_allocation(report)
         if plots:
             st.subheader(f"Diagnostic plots ({len(plots)})")
             for i in range(0, len(plots), 2):
                 cols = st.columns(2)
                 for off, plot in enumerate(plots[i:i + 2]):
                     with cols[off]:
-                        st.image(str(plot), caption=plot.stem.replace("_", " ").title())
+                        st.image(str(plot), caption=plot.stem.replace("_", " ").title(), width="stretch")
         st.caption(f"CSV: `{report}` · Plots: `{plots_dir}`")

@@ -75,6 +75,6 @@ def render() -> None:
         with st.expander("Report metrics"):
             st.markdown("**e2e_p99**: 99th-percentile end-to-end latency. "
                         "**viol_ttft** / **viol_avg_tbt**: violations of the time-to-first-token and time-between-tokens targets. "
-                        "**fss**: the summary score computed by the inference report (see its provenance panel).")
+                        "**rfws**: the summary score computed by the inference report (see its provenance panel).")
         with st.expander("Lineage"):
             st.markdown("Every artifact records its parents, so you can trace a forecast back to the clean and raw data it came from.")

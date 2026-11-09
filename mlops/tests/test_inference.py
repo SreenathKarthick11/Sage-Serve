@@ -153,7 +153,7 @@ class InferenceTests(unittest.TestCase):
         df[["ttft_times", "tbt_times", "prompt_sizes"]] = np.nan
         df.to_csv(path, index=False)
         row = self.report().metrics.iloc[0]
-        for column in ["viol_ttft", "viol_avg_tbt", "prompt_size_cv", "score_demand", "fss"]:
+        for column in ["viol_ttft", "viol_avg_tbt", "prompt_size_cv", "score_demand", "rfws"]:
             self.assertTrue(pd.isna(row[column]), column)
         self.assertEqual(row.n_valid_ttft_times, 0)
 
@@ -307,33 +307,33 @@ class InferenceTests(unittest.TestCase):
         self.assertEqual(values.iloc[0], .5)
         self.assertTrue(pd.isna(values.iloc[1]))
 
-    def test_fss_compares_peers_and_contributions_sum_to_score(self):
+    def test_rfws_compares_peers_and_contributions_sum_to_score(self):
         first = self.experiment()
         self.details(first, 0, [1.2, 1.4, 1.6])
         second = self.experiment(asynchronous="False")
         self.details(second, 0, [40, 60, 80])
-        report = self.report(fss_weights={"cost": 0})
+        report = self.report(rfws_weights={"cost": 0})
         rows = report.metrics
-        self.assertTrue(rows.fss.notna().all())
-        self.assertEqual(rows.fss_cohort_id.nunique(), 1)
-        self.assertTrue(rows.fss.between(0, 100).all())
+        self.assertTrue(rows.rfws.notna().all())
+        self.assertEqual(rows.rfws_cohort_id.nunique(), 1)
+        self.assertTrue(rows.rfws.between(0, 100).all())
         contributions = rows[[c for c in rows if c.startswith("contribution_")]].sum(axis=1)
-        np.testing.assert_allclose(rows.fss, contributions)
-        self.assertGreater(rows[rows.feed_async == "True"].fss.iloc[0], rows[rows.feed_async == "False"].fss.iloc[0])
+        np.testing.assert_allclose(rows.rfws, contributions)
+        self.assertGreater(rows[rows.feed_async == "True"].rfws.iloc[0], rows[rows.feed_async == "False"].rfws.iloc[0])
 
     def test_one_configuration_and_unrelated_models_are_not_peers(self):
         leaf = self.experiment()
         self.details(leaf, 0, [4, 6, 8], model="B")
-        rows = self.report(fss_weights={"cost": 0}).metrics
-        self.assertTrue(rows.fss.isna().all())
-        self.assertTrue(rows.fss_status.str.contains("insufficient_comparable_peers").all())
+        rows = self.report(rfws_weights={"cost": 0}).metrics
+        self.assertTrue(rows.rfws.isna().all())
+        self.assertTrue(rows.rfws_status.str.contains("insufficient_comparable_peers").all())
 
     def test_cohort_reference_changes_when_members_change(self):
         self.experiment()
         self.experiment(asynchronous="False")
-        first = self.report(fss_weights={"cost": 0}).metrics.fss_cohort_id.iloc[0]
+        first = self.report(rfws_weights={"cost": 0}).metrics.rfws_cohort_id.iloc[0]
         self.experiment(run=1)
-        second = self.report(fss_weights={"cost": 0}).metrics.fss_cohort_id.iloc[0]
+        second = self.report(rfws_weights={"cost": 0}).metrics.rfws_cohort_id.iloc[0]
         self.assertNotEqual(first, second)
 
     def test_missing_cost_does_not_receive_a_favorable_score(self):
@@ -341,20 +341,20 @@ class InferenceTests(unittest.TestCase):
         self.experiment(asynchronous="False")
         rows = self.report().metrics
         self.assertTrue(rows.score_cost.isna().all())
-        self.assertTrue(rows.fss.isna().all())
-        self.assertTrue(rows.fss_status.str.contains("incomplete_resource_duration").all())
+        self.assertTrue(rows.rfws.isna().all())
+        self.assertTrue(rows.rfws_status.str.contains("incomplete_resource_duration").all())
 
-    def test_full_fss_with_resource_coverage_and_disabled_components(self):
+    def test_full_rfws_with_resource_coverage_and_disabled_components(self):
         first = self.experiment()
         second = self.experiment(asynchronous="False")
         self.cost(first, 0, [0, 3600], prod=2)
         self.cost(second, 0, [0, 3600], prod=4)
         bounds = self.boundaries({first: [(0, 0, 3600)], second: [(0, 0, 3600)]})
         rows = self.report(window_boundaries=bounds).metrics
-        self.assertTrue(rows.fss.notna().all())
+        self.assertTrue(rows.rfws.notna().all())
         self.assertEqual(set(rows.score_cost), {0, 1})
-        np.testing.assert_allclose(rows.fss, rows[[c for c in rows if c.startswith("contribution_")]].sum(axis=1))
-        self.assertEqual(rows.fss_cohort_id.nunique(), 1)
+        np.testing.assert_allclose(rows.rfws, rows[[c for c in rows if c.startswith("contribution_")]].sum(axis=1))
+        self.assertEqual(rows.rfws_cohort_id.nunique(), 1)
 
     def test_unusable_memory_audit_does_not_certify_complete_requests(self):
         leaf = self.experiment()
@@ -367,9 +367,9 @@ class InferenceTests(unittest.TestCase):
     def test_plot_bar_positions_remain_distinct_with_duplicate_labels(self):
         self.experiment()
         self.experiment(asynchronous="False")
-        rows = self.report(fss_weights={"cost": 0}).metrics
+        rows = self.report(rfws_weights={"cost": 0}).metrics
         rows["experiment_id"], rows["feed_async"] = "identical-label", "True"
-        from inference.plots import plot_fss_bar
+        from inference.plots import plot_rfws_bar
         def inspect(fig, out_dir, name):
             positions = [bar.get_y()+bar.get_height()/2 for bar in fig.axes[0].patches]
             self.assertEqual(len(set(positions)), 2)
@@ -377,7 +377,7 @@ class InferenceTests(unittest.TestCase):
             plt.close(fig)
             return Path(name)
         with patch("inference.plots._save", side_effect=inspect):
-            plot_fss_bar(rows, Path(self.temp.name))
+            plot_rfws_bar(rows, Path(self.temp.name))
 
     def cli(self, *extra):
         out = Path(self.temp.name)/"output"/"report.csv"

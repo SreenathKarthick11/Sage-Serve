@@ -37,7 +37,7 @@ The output paths in this example all stay inside mlops:
 - static_demo_windows.csv: one row per experiment, model and exported window.
 - static_demo.metadata.json: complete saved configuration, input file hashes,
   diagnostics, thresholds, scoring references, weights and known limitations.
-- static_demo_plots/: eight diagnostic charts.
+- static_demo_plots/: six diagnostic charts, each 1560 x 780 pixels.
 
 --forecast-model supplies an **unverified label**. It does not select, run,
 or evaluate a forecasting model.
@@ -53,7 +53,7 @@ Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | Requested report outputs were written. Unknown duration or unavailable FSS can still be present. |
+| 0 | Requested report outputs were written. Unknown duration or unavailable rfws can still be present. |
 | 1 | Input/settings validation or report writing failed. |
 | 2 | A usable report was written, but inputs/request exports were incomplete or plot generation failed. |
 
@@ -113,7 +113,7 @@ experiment's source directory distinct.
 | n_observed_empty_windows | Windows with zero observed rows, which might still have omitted applications. |
 | completion_window_cv | CV of complete exported-window completion counts, including zeros. |
 | request_data_complete | Whether discovered/expected application exports and required cells are complete. Not a guarantee that the simulator exported every completion. |
-| input_error_count | Invalid inputs accepted in partial mode; affected experiments remain ineligible for FSS. |
+| input_error_count | Invalid inputs accepted in partial mode; affected experiments remain ineligible for rfws. |
 | n_unexported_live_applications | Distinct live application groups seen in memory logs but absent from relevant detailed exports. |
 | export_duration_seconds | Sum of explicitly supplied export durations; otherwise blank. |
 | completed_requests_per_second | Completions / explicit duration, only when request coverage and duration are known. |
@@ -189,9 +189,9 @@ export. An unknown initial state still leaves partial coverage. Even complete
 coverage is conditional on the recorded-state model and upstream logging
 correctness; input histories cannot prove that every transition was logged.
 
-## What relative FSS means now
+## What relative rfws means now
 
-Raw metrics are the primary results. FSS is a legacy name for an optional
+Raw metrics are the primary results. rfws is a legacy name for an optional
 **relative composite**, not a forecasting accuracy metric or an absolute
 quality grade. Schema/scoring version 2 is not comparable to old reports.
 
@@ -219,36 +219,197 @@ rejected. A component can be disabled with weight zero. For example,
 it does not repair incomplete request exports.
 
 contribution_slo, contribution_stability, contribution_demand, contribution_cost
-and contribution_throughput are weighted points whose sum equals fss.
+and contribution_throughput are weighted points whose sum equals rfws.
 weight_* records the actual normalized weights. score_slo/score_stability/
 score_demand are raw diagnostic components; score_cost/score_throughput are
 cohort-relative ranks.
 
-fss_cohort_id fingerprints the eligible member IDs, component measurements,
+rfws_cohort_id fingerprints the eligible member IDs, component measurements,
 thresholds, weights and normalization reference. The complete reference is
-saved in metadata.fss_cohorts. Adding a peer or changing evidence can change
-relative scores and the cohort ID. Compare FSS only within the **same cohort**.
+saved in metadata.rfws_cohorts. Adding a peer or changing evidence can change
+relative scores and the cohort ID. Compare rfws only within the **same cohort**.
 Do not concatenate independently scored reports and interpret score differences
 as evidence that ARIMA is better than Prophet. Use raw metrics for separate
 reports, or load aligned experiments together and score them in one cohort.
 Matching a trace label still assumes the input workload artifacts are comparable.
+
+## Recommended: four policy experiments per model
+
+Run `run_rfws_matrix.py` once for this small controlled study:
+
+| Case | Scaling level | STS | LTS | Question |
+|---|---|---|---|---|
+| Baseline | 2 | Off | Off | What happens with neither policy enabled? |
+| STS only | 2 | On | Off | What changes when STS is enabled? |
+| LTS only | 2 | Off | On | What changes when LTS is enabled? |
+| STS + LTS | 2 | On | On | How do the policies behave together? |
+
+This replaces the previous 12-case instructions. Each simulator invocation
+includes models A-D, so **four simulator runs produce 16 report rows: four per
+model**. They are not 16 separate simulator runs. Scaling levels 0 and 1 are
+excluded: holding level 2 fixed isolates the policy flags and allows resource
+transfers, which level 0 disables. The smaller study cannot measure the effect
+of changing scaling level.
+
+Execute this yourself from the repository root; editing the runner does not
+execute the experiments:
+
+~~~powershell
+Set-Location D:\Aakash_IIT\MLOps\Sage-Serve
+.\mlops\.venv\Scripts\python.exe -X utf8 mlops/inference/run_rfws_matrix.py --name s01
+~~~
+
+The runner selects the latest validated static trace and the simulator's
+separate virtual environment automatically. For another study, use a fresh
+short name such as `s02`; existing names are rejected and are never reused.
+Optional `--trace PATH` and `--sim-python PATH` select explicit inputs.
+
+One invocation:
+
+1. Splits history before original t=600 from evaluation traffic, then prepares
+   a frozen set of 12 forecast files (three regions times four models) using
+   historical traffic only. These are input files, not additional experiments.
+2. Runs the four cases sequentially with the same starting allocation of eight
+   instances per model/region, seed, routing policy, trace and 3900-second
+   simulated duration. This duration reaches the LTS update at t=3600.
+3. Checks exit codes, completion markers, saved Hydra configurations, input
+   hashes and detailed exports. It saves actual commands, timestamps and export
+   hashes; a failure stops the study and preserves its evidence.
+4. Analyzes only this study's exports. Checks require all four policy cases for
+   each of A-D, 16 eligible rows and four cohorts containing four rows each.
+5. Generates six 1560 x 780 PNGs. The two RFWS images show four model panels,
+   with four policy bars per panel. The remaining diagnostics use the same
+   16 report rows. Select `s01.csv` in the web UI after completion.
+
+Outputs for study NAME, all under `mlops/inference/reports/`:
+
+| Output | Purpose |
+|---|---|
+| NAME/manifest.json | Planned cases, overall status and per-case evidence. |
+| NAME/prepared_inputs.json | Historical/evaluation split and frozen input hashes. |
+| NAME/logs/l2_sN_tN.log | Actual simulator stdout and stderr for one case. |
+| NAME/logs/l2_sN_tN.json | Command, timestamps, exit code and completion checks. |
+| NAME/logs/l2_sN_tN_exports.json | Hashes and sizes of saved exports. |
+| NAME/metric_variation.csv | Distinct enabled scoring inputs within each model. |
+| NAME.csv, NAME_windows.csv, NAME.metadata.json | Metrics, completions table and provenance. |
+| NAME_plots/rfws_bar.png | Four policy scores in each model's panel. |
+| NAME_plots/sub_scores.png | Weighted contributions to those scores. |
+
+Plot labels use L for scaling level, S for STS and T for LTS; 0 means off and
+1 means on. RFWS comparisons apply within each model's own cohort. Cost weight
+is zero because total resource duration is not established by these exports.
+Missing resource intervals remain unknown. This study uses a short-history
+ARIMA development forecast; it does not establish forecasting accuracy.
+
+Different policies can still yield equal measurements for this workload.
+The scorer assigns tied components 0.5, yielding RFWS 50 if every enabled
+component ties. The runner does not change thresholds, measurements or scoring
+math to force different bars. Compare `metric_variation.csv`, request exports
+and per-case logs before interpreting equal scores.
+
+Exit codes: 0 means all four cases and the eligible 16-row analysis completed;
+1 means failure; 2 means analysis was saved with partial or ineligible output.
+Read the manifest, logs and `rfws_status` when a study fails. The runner does
+not resume failed studies: fix the cause and use a fresh short name. It checks
+representative nested paths before launch to avoid Windows path-length errors.
+
+The optional `--archive-current` flag only archives older `r4` and
+`rfws_matrix_*`/`fss_matrix_*` output families. It does not clear every existing
+study. Each new study remains isolated regardless of other saved outputs.
+
+## Allocation evidence and the Results UI
+
+New matrix runs automatically extract allocation evidence after analysis.
+For an existing study, run this from the repository root (no simulation or
+forecast fitting is performed):
+
+~~~powershell
+.\mlops\.venv\Scripts\python.exe -X utf8 mlops/inference/allocation.py --report mlops/inference/reports/s01.csv
+~~~
+
+Extraction writes into `reports/s01/allocation/`:
+
+| File | Contents |
+|---|---|
+| allocation_decisions.csv | Logged current counts, requested changes and calculated targets, per model/region. |
+| allocation_observations.csv | Actual saved arbiter production/spot snapshots; last exported row retained at duplicate timestamps. |
+| allocation_coverage.csv | Snapshot counts and first/last observation times for every model/region/case. |
+| allocation_hour_comparison.csv | Before/after observations around the first LTS decision at or after 3600 seconds. |
+| allocation.metadata.json | Source hashes, report hash, extraction issues and interpretation limits. |
+
+Refresh the Results page and select `s01.csv`, then choose an allocation
+region (westus by default). Four model charts show that region's production
+instance counts. Each model chart has four separate policy lanes on white
+backgrounds, so equal counts do not overlap. All regional snapshots are kept;
+no synchronization with other regions is required. In s01, initial counts
+are eight per model for each region, rather than the 24-instance regional sum.
+
+At time zero, counts come from the saved initial configuration and observed
+change is zero. Later points come from arbiter snapshots or current counts
+logged immediately before optimizer decisions. Hover shows the region, count,
+LTS requested delta/target and count difference since the previous known state.
+LTS requested change is Not applicable for baseline and STS-only because LTS
+is disabled; an initial state or snapshot without an optimizer decision is
+marked No decision at this sample. Zero is shown for a requested delta only
+when an actual logged decision requests zero change.
+
+All model charts share time and count scales within the selected region.
+Coincident pre-decision and exported states remain separate events. Differences
+between known counts can include STS and do not prove execution of an optimizer
+request. Baseline has an initial point but no invented later measurements.
+Dashed lines connect known samples as visual guides; they do not establish when
+changes occurred between observations and never extend beyond the last count.
+
+The allocation section contains four charts and the region selector, without
+supporting tables or coverage captions. Existing evidence CSVs remain available
+on disk for auditing. Configured initial counts are stored in
+allocation.metadata.json; re-extract older studies if initial counts are absent.
+Counts are model instances, not individual GPUs. In s01, counts recorded just
+before the second LTS decision are available even though post-decision exports
+are not. No simulator rerun is needed to switch between saved regions.
+
+This extraction supports single-GPU-type allocation matrices from the current
+simulator and uses saved Hydra configuration to map region/model indices.
+Missing mappings, malformed decision matrices and invalid resource files are
+reported in extraction metadata rather than filled with invented values.
 
 ## Plots
 
 All plots use numeric positions and experiment identifiers, so configurations
 cannot overlap just because their model/LTS names match. Unknown values are
 omitted or explicitly labelled; they are never replaced by apparent zeros.
+Every plot uses a 12 x 6 inch canvas at 130 DPI (1560 x 780 pixels). Report row
+counts do not change image dimensions. Compact labels use the model, run and
+experiment ID; the complete trace/configuration remains in the report table.
 
 | File | Purpose |
 |---|---|
-| fss_bar.png | Relative scores or explicit reasons that scores are unavailable. |
-| sub_scores.png | Actual weighted FSS contributions, summing to the final score. |
+| rfws_bar.png | Relative scores or explicit reasons that scores are unavailable. |
+| sub_scores.png | Actual weighted rfws contributions, summing to the final score. |
 | latency_pct.png | Pooled p50/p95/p99 end-to-end latency. |
 | slo_violations.png | Fixed benchmark violation fractions; average TBT is labelled precisely. |
 | cv_scatter.png | Response-time variability versus prompt-size variability; no forecastability claim. |
 | resource_usage.png | Production/spot instance-hours with resource-coverage status. |
-| data_coverage.png | Valid measurements / observed rows, with incomplete-export warnings. |
-| completions_by_window.png | Completion counts including quiet windows; red crosses indicate observed subsets. |
+
+The web UI's Results page displays data coverage as an interactive table for the
+selected report, above the diagnostic plots. It includes valid measurement counts
+and percentages, exported windows, missing application exports, request-export
+completeness, resource coverage and known export duration. Percentages use observed
+request rows; zero-sample or unavailable values remain blank. Existing reports
+work without regeneration, and legacy `data_coverage.png` files are hidden in the UI.
+
+Completions by window are also displayed as a full-width interactive table, read
+from the companion `_windows.csv`. Each row identifies an experiment and export
+window, with one completion-count column per model for parallel comparison. Zero
+denotes a confirmed quiet window; incomplete or unavailable counts remain blank.
+An expandable detail table retains observed subsets from incomplete exports.
+Window indexes are not timestamps. A report without its companion window file
+displays an availability message rather than inferred counts.
+
+The six plots appear in three two-column rows: score/contributions,
+latency/violations, and resources/variability. Legacy `completions_by_window.png`
+files are hidden. Regenerate plots from an existing report to apply uniform
+dimensions to older images; a simulator rerun is not required.
 
 ## Optional forecast error evaluation
 
@@ -305,8 +466,12 @@ the available/discovered export inventory, not the upstream exporter.
 
 ## Tests and Python API
 
+The existing inference tests live in mlops/tests/test_inference.py. From the
+repository root, activate the MLOps environment and run:
+
 ~~~bash
-PYTHONPATH=mlops python -B -m unittest discover -s mlops/inference/tests -v
+cd mlops
+python -B -m unittest tests.test_inference -v
 ~~~
 
 Tests use small temporary fixtures and do not rerun the simulator.
