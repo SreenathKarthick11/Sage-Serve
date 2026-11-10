@@ -1,0 +1,25 @@
+{
+  "id": "streaming/raw/5db433e21d1b",
+  "source": "streaming",
+  "stage": "raw",
+  "version": "5db433e21d1b",
+  "parents": [],
+  "params": {
+    "duration": 30.0,
+    "speedup": 300.0,
+    "rate_scale": 0.002,
+    "seed": 42,
+    "tick": 0.2
+  },
+  "files": {
+    "trace.csv": "5db433e21d1b8c48d0c7da8e50503ac59c27260fc41998a6ca41a5e7e7b097fb"
+  },
+  "created_at": "2026-11-10T06:02:50+00:00",
+  "git_commit": "182ac6a",
+  "details": {
+    "ingest": "fastapi-asgi-inprocess",
+    "status": "complete",
+    "rows": 7898,
+    "simulated_seconds": 8940.327
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "id": "20261027-090402-0c9d",
+  "status": "succeeded",
+  "created_at": "2026-10-27T03:34:02+00:00",
+  "started_at": "2026-10-27T03:34:02+00:00",
+  "finished_at": "2026-10-27T03:34:08+00:00",
+  "request": {
+    "pipeline": "full",
+    "source": "static",
+    "stages": [
+      "ingest",
+      "etl",
+      "forecast"
+    ],
+    "seed": 42,
+    "seeds": [
+      42
+    ],
+    "num_requests": 5000
+  },
+  "stages": [
+    "ingest",
+    "etl",
+    "forecast"
+  ],
+  "commands": [
+    "python -m pipeline.run_pipeline --source static --stages ingest,etl,forecast --seed 42 --num-requests 5000"
+  ],
+  "current_command": 0,
+  "exit_codes": [
+    0
+  ],
+  "phase": null,
+  "finishable": false,
+  "cancel_requested": false,
+  "collecting": false,
+  "produced": [
+    "static/clean/2c95d94fd840",
+    "static/forecasts/ce827f5cc85c",
+    "static/raw/d51facaf7e65"
+  ],
+  "error": null,
+  "_argv": [
+    [
+      "/home/sreenath-karthick/repos/Sage-Serve/mlops/.venv/bin/python",
+      "-u",
+      "-m",
+      "pipeline.run_pipeline",
+      "--source",
+      "static",
+      "--stages",
+      "ingest,etl,forecast",
+      "--seed",
+      "42",
+      "--num-requests",
+      "5000"
+    ]
+  ],
+  "_ids_before": []
+}

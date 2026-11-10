@@ -1,0 +1,9 @@
+model_info:
+  type: hmm
+  description: HMM workload forecaster
+  version: v1
+parameters:
+  n_states: 3
+  train_window_mins: 60
+  future_horizon: 60
+  bucket_seconds: 60

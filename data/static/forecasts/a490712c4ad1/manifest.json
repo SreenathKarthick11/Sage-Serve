@@ -1,0 +1,77 @@
+{
+  "id": "static/forecasts/a490712c4ad1",
+  "source": "static",
+  "stage": "forecasts",
+  "version": "a490712c4ad1",
+  "parents": [
+    "static/clean/2c95d94fd840"
+  ],
+  "params": {
+    "forecaster_implementation": "arima-wrapper-v1",
+    "forecaster_metadata": {
+      "model_type": "ARIMA",
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "train_window": 60,
+      "future_horizon": 60,
+      "bucket_seconds": 60,
+      "enforce_stationarity": false,
+      "enforce_invertibility": false,
+      "model_info": {
+        "type": "arima",
+        "description": "ARIMA workload forecaster",
+        "version": "v6"
+      }
+    },
+    "train_window": 60,
+    "future_horizon": 60,
+    "bucket_seconds": 60,
+    "workload_metric": "sum(prompt_size) per minute",
+    "models": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "source_regions": [
+      0,
+      1,
+      2
+    ]
+  },
+  "files": {
+    "forecast_A_region0.csv": "0d10276c1095d8e0373cda4b68e829c80b244617ab851092774e983c11425ce9",
+    "forecast_A_region1.csv": "308dab2bee7aa7f6da52817408d6c3fb2df8dd176442345d6c6d6f832c31f04e",
+    "forecast_A_region2.csv": "b56c180dc95bde901bf9689c83c58d6a715b0aefc8eaca5a5c31603012a5dc50",
+    "forecast_B_region0.csv": "a346dd1361ce71d1ed0f93ffea9147a7e1d39f354557c71a6328544580e9d834",
+    "forecast_B_region1.csv": "80375b7e5bb00427e54c0f9aa988bc11d3e935b780b2511950169f96b93beaf2",
+    "forecast_B_region2.csv": "1e24e7f97cd6dd819be4c9b41ef54bb1cc17828a7cdb8d796b1653f344367cce",
+    "forecast_C_region0.csv": "ce1d6c2af4c5fec35ba2aca13b9a4d3035f4127b60608f167385baa14338aa26",
+    "forecast_C_region1.csv": "9e28f86b3f2088977cc6489f47d5bf46284b191394d69c6408d01a07487de17b",
+    "forecast_C_region2.csv": "e187cb03051bf60737edee11cd47eb4084021930c4b749dceb4a6db801a8c05f",
+    "forecast_D_region0.csv": "eb5013a61c1b3a7fe02e2629a086c454cee8c551f42e03ebcee5beeedf726acb",
+    "forecast_D_region1.csv": "4c3f22d491ab7bf80fac0ab8da2fc18d9c7908f6c7d2cbc1d7288f4d81d6469c",
+    "forecast_D_region2.csv": "96b5b969e3416e393b1a9d7544c28fa1301baf19dda998c8762ebdbfad00f513"
+  },
+  "created_at": "2026-11-10T12:49:26+00:00",
+  "git_commit": "182ac6a",
+  "details": {
+    "status": "complete",
+    "n_forecast_files": 12,
+    "models": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "source_regions": [
+      0,
+      1,
+      2
+    ],
+    "last_observed_minute": 83
+  }
+}

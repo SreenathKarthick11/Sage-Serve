@@ -1,0 +1,13 @@
+{
+  "name": "hmm",
+  "version_id": "v1",
+  "card_fields": {
+    "model_description": "HMM workload forecaster",
+    "intended_use": "Per-minute prompt-size forecasting",
+    "limitations": "Argmax state transitions give repetitive forecasts"
+  },
+  "metrics": {
+    "mae": 11.0
+  },
+  "created_at": "2026-11-04T10:25:02.102340+00:00"
+}

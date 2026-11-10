@@ -1,0 +1,13 @@
+{
+  "name": "arima",
+  "version_id": "v1",
+  "card_fields": {
+    "model_description": "Workload forecasting model",
+    "intended_use": "Forecast per-minute SageServe request workload.",
+    "limitations": "Forecast quality depends on trace history and model parameters."
+  },
+  "metrics": {
+    "mae": 9.2
+  },
+  "created_at": "2026-11-06T15:10:52.081311+00:00"
+}
