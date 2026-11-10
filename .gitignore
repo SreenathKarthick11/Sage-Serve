@@ -15,10 +15,9 @@ experiments/ilp_outputs/*
 experiments/results/*
 
 # Generated traces
-data/traces/*
 data/
 .trashyard
 
 ## Inferences
 
-mlops/inference/plots/ 
+mlops/inference/plots/
