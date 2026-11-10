@@ -28,9 +28,8 @@ docker compose build
 docker compose up -d webui
 ```
 
-### Walk through of Setup
+Walk through Video of Setup : [Link](docs/Video/Build_and_setup.mp4)
 
-<video src="docs/Video/Build_and_setup.mp4" autoplay loop muted playsinline width="100%"></video>
 
 Once running, open your browser and navigate to: **[http://localhost:8501](http://localhost:8501)**
 
