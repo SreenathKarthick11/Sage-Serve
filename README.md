@@ -11,7 +11,8 @@ Instead of reactive autoscaling, SageServe anticipates incoming token demand acr
 Your commands are completely correct! The entire environment is containerized with Docker.
 
 ### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/)
+
+You will need to install  [Docker](https://docs.docker.com/get-docker/)
 
 ### Steps
 
@@ -27,22 +28,25 @@ docker compose build
 docker compose up -d webui
 ```
 
-Once running, open your browser and navigate to:
-👉 **[http://localhost:8501](http://localhost:8501)**
+### Walk through of Setup
+
+<video src="docs/Video/Build_and_setup.mp4" autoplay loop muted playsinline width="100%"></video>
+
+Once running, open your browser and navigate to: **[http://localhost:8501](http://localhost:8501)**
 
 ---
 
 ### Additional Commands
 
-- **Interactive Dev Shell**:
+**Interactive Dev Shell**:
   ```bash
   docker compose run --rm sageserve bash
   ```
-- **View Web UI Logs**:
+**View Web UI Logs**:
   ```bash
   docker compose logs -f webui
   ```
-- **Stop Services**:
+**Stop Services**:
   ```bash
   docker compose down
   ```
@@ -53,8 +57,10 @@ Once running, open your browser and navigate to:
 
 For in-depth details on system architecture, algorithms, and experiments:
 
-- 📊 **Presentation Slides**: [SageServe MLOps Platform (PDF)](docs/Presentation/SageServe%20MLOps%20Platform.pdf)
-- 📖 **Technical Architecture Reference**: [SageServe MLOps Platform Detail](docs/Summary_Docs/SageServe_MLOps_Platform_detail.md)
-- ⚙️ **GPU Allocation Deep Dive**: [How SageServe does GPU Allocation](docs/Summary_Docs/How%20does%20Sage%20Serve%20does%20%20GPU%20allocation.md)
-- 🎥 **Build & Setup Walkthrough**: [Build & Setup Video](docs/Video/Build_and_setup.mp4)
-- 📄 **Original Research Paper**: [SageServe Highlighted Paper](docs/Papers/sage_serve_highlighted.pdf)
+- **Presentation Slides**: [SageServe MLOps Platform (PDF)](docs/Presentation/SageServe%20MLOps%20Platform.pdf)
+- **Technical Architecture Reference**: [SageServe MLOps Platform Detail](docs/Summary_Docs/SageServe_MLOps_Platform_detail.md)
+- **GPU Allocation Deep Dive**: [How SageServe does GPU Allocation](docs/Summary_Docs/How%20does%20Sage%20Serve%20does%20%20GPU%20allocation.md)
+- **Original Research Paper**: [SageServe Highlighted Paper](docs/Papers/sage_serve_highlighted.pdf)
+
+---
+
